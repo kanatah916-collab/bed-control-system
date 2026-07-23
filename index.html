@@ -65,6 +65,14 @@
     th,td{border-bottom:1px solid var(--line);padding:10px;text-align:left;font-size:14px}
     th{background:#f8fafc}
     .num{text-align:right}
+    .occupancy-wrap{min-width:220px}
+    .occupancy-text{font-weight:800;margin-bottom:6px;white-space:nowrap}
+    .progress-track{height:12px;border-radius:999px;background:#e7edf4;overflow:hidden;border:1px solid #d5dee9}
+    .progress-bar{height:100%;border-radius:999px;transition:width .25s ease}
+    .occ-low{background:#238a8d}
+    .occ-mid{background:#d49b22}
+    .occ-high{background:#c84b3a}
+    .accept-count{font-weight:800;color:var(--accent)}
     @media(max-width:900px){.grid,.grid-3{grid-template-columns:repeat(2,minmax(150px,1fr))}}
     @media(max-width:560px){.grid,.grid-3{grid-template-columns:1fr} header{position:static}}
   </style>
@@ -72,7 +80,7 @@
 <body>
 <header>
   <h1>小田原市立総合医療センター　ベッドコントロールシステム</h1>
-  <p>試作版 Ver.0.6｜データはこの端末のブラウザ内にのみ保存されます</p>
+  <p>試作版 Ver.0.7｜データはこの端末のブラウザ内にのみ保存されます</p>
 </header>
 <main>
   <div class="notice"><strong>テスト時の注意：</strong>実在する患者氏名・患者IDなどの個人情報は入力せず、架空データで操作してください。</div>
@@ -302,7 +310,7 @@ function judge(index){
     results.innerHTML=`<div class="empty">条件に合う空床がありません。部屋希望の変更、利用停止床、病棟への個別確認が必要です。</div>`;
     return;
   }
-  results.innerHTML=candidates.slice(0,5).map((c,i)=>{
+  results.innerHTML=candidates.slice(0,3).map((c,i)=>{
     const reasons=[];
     if(c.isPrimary) reasons.push(`${dept}の主病棟`);
     else reasons.push(`主病棟に適合病床がない場合の代替候補`);
@@ -319,12 +327,13 @@ function roomDataKey(pref,sex){
   if(pref==="special4") return sex==="male" ? "maleSpecial4" : "femaleSpecial4";
   return pref;
 }
-function saveHistoryEntry(label, detail, beforeBeds, beforeCritical, patientIndex){
+function saveHistoryEntry(label, detail, beforeBeds, beforeCritical, patientIndex, destination){
   adjustmentHistory.unshift({
     id:Date.now(),
     time:new Date().toISOString(),
     label,
     detail,
+    destination,
     patient:patientSummary(patientIndex),
     beforeBeds,
     beforeCritical,
@@ -355,7 +364,7 @@ function confirmGeneralAdjustment(ward,pref,sex,patientIndex){
   const beforeCritical=JSON.parse(JSON.stringify(criticalData));
   bedData[ward][key]=Number(bedData[ward][key])-1;
   const detail=`${ward}・${roomLabel(pref,sex)}を1床使用`;
-  saveHistoryEntry(`${ward}で入院調整`,detail,beforeBeds,beforeCritical,patientIndex);
+  saveHistoryEntry(`${ward}で入院調整`,detail,beforeBeds,beforeCritical,patientIndex,ward);
   persistCurrentState();
   patientField(patientIndex,"results").innerHTML=`<div class="result"><h3><span class="rank">調整確定</span><span>${ward}</span></h3><p>${detail}として空床数を自動更新しました。</p></div>`;
 }
@@ -368,7 +377,7 @@ function confirmCriticalAdjustment(unit,patientIndex){
   const beforeCritical=JSON.parse(JSON.stringify(criticalData));
   criticalData[unit]=Number(criticalData[unit])-1;
   const detail=`${unit}を1床使用`;
-  saveHistoryEntry(`${unit}で入院調整`,detail,beforeBeds,beforeCritical,patientIndex);
+  saveHistoryEntry(`${unit}で入院調整`,detail,beforeBeds,beforeCritical,patientIndex,unit);
   persistCurrentState();
   patientField(patientIndex,"results").innerHTML=`<div class="result"><h3><span class="rank">調整確定</span><span>${unit}</span></h3><p>${detail}として空床数を自動更新しました。</p></div>`;
 }
@@ -438,47 +447,73 @@ function saveBedsSilent(){
   criticalData={"3D":getVal("critical-3D"),"3HCU":getVal("critical-3HCU"),"3ICU":getVal("critical-3ICU")};
   localStorage.setItem("bedControlData",JSON.stringify(bedData)); localStorage.setItem("bedControlCritical",JSON.stringify(criticalData));
 }
+function isToday(iso){
+  const d=new Date(iso), now=new Date();
+  return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
+}
+function destinationFromHistory(h){
+  if(h.destination) return h.destination;
+  const match=String(h.label||"").match(/^(3ICU|3HCU|3D|[6-9][EW])/);
+  return match ? match[1] : "";
+}
+function todayAcceptCount(destination){
+  return adjustmentHistory.filter(h=>isToday(h.time) && destinationFromHistory(h)===destination).length;
+}
+function occupancyInfo(capacity, stopped, available){
+  const usable=Math.max(0,Number(capacity)-Number(stopped||0));
+  const occupied=Math.max(0,usable-Number(available||0));
+  const rate=usable>0 ? Math.round((occupied/usable)*100) : 0;
+  const level=rate>=90 ? "high" : rate>=80 ? "mid" : "low";
+  return {usable,occupied,rate,level};
+}
+function occupancyHtml(info){
+  return `<div class="occupancy-wrap">
+    <div class="occupancy-text">${info.occupied}/${info.usable}床使用中（稼働率：${info.rate}％）</div>
+    <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${info.rate}" aria-label="稼働率 ${info.rate}％">
+      <div class="progress-bar occ-${info.level}" style="width:${Math.min(100,info.rate)}%"></div>
+    </div>
+  </div>`;
+}
 function renderOverview(){
-  let rows="";
+  let cards="";
   Object.entries(wardMaster).forEach(([n,w])=>{
     const d=bedData[n]||{}, avail=totalAvailable(d);
-    rows+=`<tr>
-      <td><strong>${n}</strong></td>
-      <td class="num">${d.maleGeneral||0}床</td>
-      <td class="num">${d.femaleGeneral||0}床</td>
-      <td class="num">${d.maleSpecial4||0}床</td>
-      <td class="num">${d.femaleSpecial4||0}床</td>
-      <td class="num">${d.B||0}室</td>
-      <td class="num">${d.A||0}室</td>
-      <td class="num">${d.severe||0}室</td>
-      <td class="num">${d.stopped||0}床</td>
-      <td class="num"><strong>${avail}床</strong></td>
-    </tr>`;
+    const occ=occupancyInfo(totalCapacity(w),d.stopped||0,avail);
+    cards+=`<div class="ward">
+      <div class="ward-head">
+        <div>
+          <div class="ward-title">${n}</div>
+          <div class="summary">空床合計 <strong>${avail}床</strong>｜利用停止 ${d.stopped||0}床｜本日の受入 <span class="accept-count">${todayAcceptCount(n)}件</span></div>
+        </div>
+        ${occupancyHtml(occ)}
+      </div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>男大部屋</th><th>女大部屋</th><th>男特別4床室</th><th>女特別4床室</th><th>特別室B</th><th>特別室A</th><th>重症個室</th></tr></thead>
+        <tbody><tr>
+          <td>${d.maleGeneral||0}床</td><td>${d.femaleGeneral||0}床</td><td>${d.maleSpecial4||0}床</td><td>${d.femaleSpecial4||0}床</td>
+          <td>${d.B||0}室</td><td>${d.A||0}室</td><td>${d.severe||0}室</td>
+        </tr></tbody>
+      </table></div>
+    </div>`;
   });
+  const criticalCaps={"3D":20,"3HCU":16,"3ICU":12};
+  const criticalCards=Object.entries(criticalCaps).map(([n,cap])=>{
+    const avail=Number(criticalData[n]||0), occ=occupancyInfo(cap,0,avail);
+    return `<div class="ward">
+      <div class="ward-head">
+        <div>
+          <div class="ward-title">${n}</div>
+          <div class="summary">空床 <strong>${avail}床</strong>｜総病床 ${cap}床｜本日の受入 <span class="accept-count">${todayAcceptCount(n)}件</span></div>
+        </div>
+        ${occupancyHtml(occ)}
+      </div>
+    </div>`;
+  }).join("");
   document.getElementById("overviewTable").innerHTML=`
-    <div style="overflow-x:auto"><table>
-      <thead><tr>
-        <th>病棟</th>
-        <th class="num">男大部屋</th>
-        <th class="num">女大部屋</th>
-        <th class="num">男特別4床室</th>
-        <th class="num">女特別4床室</th>
-        <th class="num">特別室B</th>
-        <th class="num">特別室A</th>
-        <th class="num">重症個室</th>
-        <th class="num">利用停止</th>
-        <th class="num">空床合計</th>
-      </tr></thead><tbody>${rows}</tbody>
-    </table></div>
+    <div class="summary" style="margin-bottom:14px">稼働率は、総病床から利用停止病床を除いた「稼働可能病床」を基準に算出しています。</div>
+    ${cards}
     <h3 style="margin-top:24px">3系病床</h3>
-    <div style="overflow-x:auto"><table>
-      <thead><tr><th>病棟</th><th class="num">総病床</th><th class="num">空床</th></tr></thead>
-      <tbody>
-        <tr><td><strong>3D</strong></td><td class="num">20床</td><td class="num"><strong>${criticalData["3D"]||0}床</strong></td></tr>
-        <tr><td><strong>3HCU</strong></td><td class="num">16床</td><td class="num"><strong>${criticalData["3HCU"]||0}床</strong></td></tr>
-        <tr><td><strong>3ICU</strong></td><td class="num">12床</td><td class="num"><strong>${criticalData["3ICU"]||0}床</strong></td></tr>
-      </tbody>
-    </table></div>`;
+    ${criticalCards}`;
 }
 
 function populateCriticalInputs(){
@@ -531,59 +566,10 @@ function showPatient(index){
 }
 
 document.querySelectorAll(".tab-btn").forEach(b=>b.addEventListener("click",()=>{
-  
-function populateCriticalInputs(){
-  const settings=[["critical-3D",20,"3D"],["critical-3HCU",16,"3HCU"],["critical-3ICU",12,"3ICU"]];
-  settings.forEach(([id,max,key])=>{
-    const el=document.getElementById(id);
-    el.innerHTML=numberOptions(max,criticalData[key]||0);
-    el.value=criticalData[key]||0;
-  });
-}
-function patientFormHtml(index){
-  return `<div class="patient-form ${index===0?"active":""}" id="patient-form-${index}">
-    <div class="patient-title">緊急患者 ${index+1}</div>
-    <div class="grid">
-      <div><label>患者ID（テスト用）</label><input id="p${index}-patientId" placeholder="例：TEST-${String(index+1).padStart(3,"0")}"></div>
-      <div><label>患者氏名（テスト用）</label><input id="p${index}-patientName" placeholder="例：テスト患者"></div>
-      <div><label>診療科</label><select id="p${index}-department">${departments.map(d=>`<option>${d}</option>`).join("")}</select></div>
-      <div><label>性別</label><select id="p${index}-sex"><option value="male">男性</option><option value="female">女性</option></select></div>
-      <div><label>年齢</label><select id="p${index}-age">${ageOptions(0)}</select></div>
-      <div><label>必要病床区分</label>
-        <select id="p${index}-careLevel">
-          <option value="general">一般病棟</option><option value="3D">3D</option><option value="critical">HCU・ICU</option>
-        </select>
-      </div>
-      <div><label>希望病室</label>
-        <select id="p${index}-roomPreference">
-          <option value="any">希望なし</option><option value="general">大部屋</option><option value="special4">特別4床室</option>
-          <option value="B">特別室B</option><option value="A">特別室A</option><option value="severe">重症個室</option>
-        </select>
-      </div>
-      <div><label>認知症</label><select id="p${index}-dementia"><option>なし</option><option>あり</option><option>不明</option></select></div>
-      <div><label>ADL</label><select id="p${index}-adl"><option>自立</option><option>独歩</option><option>車椅子</option><option>ストレッチャー</option><option>寝たきり</option></select></div>
-      <div><label>酸素</label><select id="p${index}-oxygen"><option>なし</option><option>あり</option></select></div>
-      <div><label>NEWSスコア</label><select id="p${index}-news">${numberOptions(20,0)}</select></div>
-      <div><label>病名</label><input id="p${index}-diagnosis"></div>
-    </div>
-    <div style="margin-top:12px"><label>その他医療的情報・注意事項</label><textarea id="p${index}-notes"></textarea></div>
-    <div class="actions"><button class="btn btn-primary" onclick="judge(${index})">候補病棟を表示</button></div>
-    <div id="p${index}-results"></div>
-  </div>`;
-}
-function renderPatientForms(){
-  document.getElementById("patientTabs").innerHTML=Array.from({length:10},(_,i)=>
-    `<button class="patient-tab ${i===0?"active":""}" onclick="showPatient(${i})">患者${i+1}</button>`).join("");
-  document.getElementById("patientForms").innerHTML=Array.from({length:10},(_,i)=>patientFormHtml(i)).join("");
-}
-function showPatient(index){
-  document.querySelectorAll(".patient-tab").forEach((el,i)=>el.classList.toggle("active",i===index));
-  document.querySelectorAll(".patient-form").forEach((el,i)=>el.classList.toggle("active",i===index));
-}
-
-document.querySelectorAll(".tab-btn").forEach(x=>x.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach(x=>x.classList.remove("active"));
   document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));
-  b.classList.add("active"); document.getElementById(b.dataset.tab).classList.add("active");
+  b.classList.add("active");
+  document.getElementById(b.dataset.tab).classList.add("active");
   if(b.dataset.tab==="overview"){saveBedsSilent();renderOverview();}
   if(b.dataset.tab==="history"){renderHistory();}
 }));
@@ -594,7 +580,9 @@ document.getElementById("sampleBeds").addEventListener("click",()=>{
     const vals={maleGeneral:2+(i%3),femaleGeneral:1+((i+1)%3),maleSpecial4:i%2,femaleSpecial4:(i+1)%2,B:1+(i%3),A:i%2,severe:i%2,stopped:i%2};
     fields.forEach(([k])=>document.getElementById(`${n}-${k}`).value=vals[k]); updateWardCalc(n);
   });
-  document.getElementById("critical-3D").value=2;document.getElementById("critical-3HCU").value=1;document.getElementById("critical-3ICU").value=1;
+  document.getElementById("critical-3D").value=2;
+  document.getElementById("critical-3HCU").value=1;
+  document.getElementById("critical-3ICU").value=1;
 });
 document.getElementById("clearBeds").addEventListener("click",()=>{
   if(!confirm("入力済みの病床状況をすべてリセットしますか？")) return;
@@ -603,7 +591,11 @@ document.getElementById("clearBeds").addEventListener("click",()=>{
   bedData={};criticalData={"3D":0,"3HCU":0,"3ICU":0};adjustmentHistory=[];morningSnapshot=null;
   renderInputs();populateCriticalInputs();renderOverview();renderHistory();
 });
-renderInputs();populateCriticalInputs();renderPatientForms();renderOverview();renderHistory();
+renderInputs();
+populateCriticalInputs();
+renderPatientForms();
+renderOverview();
+renderHistory();
 </script>
 </body>
 </html>
