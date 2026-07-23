@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ベッドコントロールシステム（試作版）</title>
+  <style>
+    :root{
+      --bg:#f4f7fb; --card:#fff; --text:#1f2937; --muted:#667085;
+      --line:#d9e1ec; --accent:#1769aa; --accent2:#eaf3fb;
+      --ok:#198754; --warn:#b7791f; --bad:#c0392b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:"Yu Gothic UI","Meiryo",sans-serif;background:var(--bg);color:var(--text)}
+    header{background:#fff;border-bottom:1px solid var(--line);padding:18px 24px;position:sticky;top:0;z-index:10}
+    header h1{margin:0;font-size:24px}
+    header p{margin:5px 0 0;color:var(--muted);font-size:13px}
+    main{max-width:1280px;margin:22px auto;padding:0 18px 40px}
+    .notice{background:#fff6df;border:1px solid #f2d39a;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:14px}
+    .tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+    .tab-btn{border:1px solid var(--line);background:#fff;border-radius:9px;padding:10px 16px;cursor:pointer;font-weight:700}
+    .tab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .panel{display:none}
+    .panel.active{display:block}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 2px 8px rgba(16,24,40,.04)}
+    h2{font-size:20px;margin:0 0 14px}
+    h3{font-size:16px;margin:0 0 12px}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:12px}
+    .grid-3{display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:12px}
+    label{display:block;font-size:13px;font-weight:700;margin-bottom:5px}
+    input,select,textarea{width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:9px 10px;background:#fff;font:inherit}
+    textarea{min-height:86px;resize:vertical}
+    input[type=number]{text-align:right}
+    .ward{border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;background:#fbfdff}
+    .ward-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
+    .ward-title{font-size:18px;font-weight:800}
+    .summary{font-size:13px;color:var(--muted)}
+    .btn{border:0;border-radius:9px;padding:11px 18px;cursor:pointer;font-weight:800}
+    .btn-primary{background:var(--accent);color:#fff}
+    .btn-sub{background:#eef2f6;color:#344054}
+    .btn-danger{background:#fff0ef;color:#b42318;border:1px solid #f2c7c3}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+    .result{border-left:6px solid var(--accent);background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 1px 5px rgba(0,0,0,.05)}
+    .result h3{display:flex;justify-content:space-between;gap:8px;margin-bottom:6px}
+    .rank{color:var(--accent)}
+    .reason{margin:7px 0 0;padding-left:20px}
+    .tag{display:inline-block;border-radius:999px;padding:4px 9px;margin:3px 4px 3px 0;font-size:12px;font-weight:700;background:var(--accent2);color:#145b92}
+    .tag.warn{background:#fff4d8;color:#8a5b00}
+    .tag.bad{background:#fdecec;color:#a52a2a}
+    .empty{padding:24px;text-align:center;color:var(--muted);border:1px dashed #b8c3d1;border-radius:12px}
+    .history-item{border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px;background:#fff}
+    .history-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+    .history-time{font-size:12px;color:var(--muted);margin-top:4px}
+    .history-detail{margin-top:8px;font-size:14px}
+    .mini-btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 10px;cursor:pointer;font-weight:700}
+    .confirm-btn{margin-top:12px;background:var(--ok);color:#fff;border:0;border-radius:8px;padding:9px 13px;cursor:pointer;font-weight:800}
+    .patient-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+    .patient-tab{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 12px;cursor:pointer;font-weight:700}
+    .patient-tab.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+    .patient-form{display:none;border-top:1px solid var(--line);padding-top:16px}
+    .patient-form.active{display:block}
+    .patient-title{font-size:18px;font-weight:800;margin-bottom:12px}
+
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid var(--line);padding:10px;text-align:left;font-size:14px}
+    th{background:#f8fafc}
+    .num{text-align:right}
+    @media(max-width:900px){.grid,.grid-3{grid-template-columns:repeat(2,minmax(150px,1fr))}}
+    @media(max-width:560px){.grid,.grid-3{grid-template-columns:1fr} header{position:static}}
+  </style>
+</head>
+<body>
+<header>
+  <h1>小田原市立総合医療センター　ベッドコントロールシステム</h1>
+  <p>試作版 Ver.0.6｜データはこの端末のブラウザ内にのみ保存されます</p>
+</header>
+<main>
+  <div class="notice"><strong>テスト時の注意：</strong>実在する患者氏名・患者IDなどの個人情報は入力せず、架空データで操作してください。</div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="beds">① 朝の病床入力</button>
+    <button class="tab-btn" data-tab="admission">② 緊急入院判定</button>
+    <button class="tab-btn" data-tab="overview">③ 病床一覧</button>
+    <button class="tab-btn" data-tab="history">④ 調整履歴</button>
+  </div>
+
+  <section id="beds" class="panel active">
+    <div class="card">
+      <h2>朝の病床状況入力</h2>
+      <p class="summary">各病棟について、現在案内できる空床・空室数を入力してください。</p>
+      <div id="wardInputs"></div>
+
+      <div class="ward">
+        <div class="ward-head">
+          <div class="ward-title">3系病床</div>
+          <div class="summary">3D 20床｜3HCU 16床｜3ICU 12床</div>
+        </div>
+        <div class="grid-3">
+          <div><label>3D 空床（床）</label><select id="critical-3D"></select></div>
+          <div><label>3HCU 空床（床）</label><select id="critical-3HCU"></select></div>
+          <div><label>3ICU 空床（床）</label><select id="critical-3ICU"></select></div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="saveBeds">病床状況を保存</button>
+        <button class="btn btn-sub" id="sampleBeds">サンプル値を入力</button>
+        <button class="btn btn-danger" id="clearBeds">入力をリセット</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="admission" class="panel">
+    <div class="card">
+      <div class="ward-head">
+        <div>
+          <h2>緊急入院患者入力</h2>
+          <p class="summary">最大10名まで同時に入力できます。患者ごとに候補病棟を表示し、個別に調整を確定してください。</p>
+        </div>
+      </div>
+      <div id="patientTabs" class="patient-tabs"></div>
+      <div id="patientForms"></div>
+    </div>
+  </section>
+
+  <section id="overview" class="panel">
+    <div class="card">
+      <h2>現在の病床一覧</h2>
+      <div id="overviewTable"></div>
+    </div>
+  </section>
+
+  <section id="history" class="panel">
+    <div class="card">
+      <div class="ward-head">
+        <div>
+          <h2>調整履歴</h2>
+          <p class="summary">入院調整を確定した時点の空床状況を保存しています。復元すると、その時点の空床数に戻ります。</p>
+        </div>
+        <button class="btn btn-sub" id="undoLatest">直前の調整を取り消す</button>
+      </div>
+      <div id="historyList"></div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const wardMaster = {
+  "6E": {general:28, special4:4, B:8, A:2, severe:1, depts:["救急科","形成外科","皮膚科","眼科","糖尿病内科"]},
+  "7E": {general:28, special4:4, B:9, A:2, severe:1, depts:["整形外科"]},
+  "7W": {general:28, special4:4, B:6, A:1, severe:3, depts:["耳鼻咽喉科","呼吸器外科","呼吸器内科","感染症科"]},
+  "8E": {general:28, special4:4, B:9, A:2, severe:1, depts:["消化器内科","泌尿器科"]},
+  "8W": {general:24, special4:8, B:7, A:2, severe:2, depts:["外科"], restricted:true},
+  "9E": {general:28, special4:4, B:9, A:2, severe:1, depts:["循環器内科","心臓血管外科"], restricted:true},
+  "9W": {general:24, special4:8, B:7, A:2, severe:2, depts:["脳神経外科","脳神経内科"]}
+};
+const departments = [...new Set(Object.values(wardMaster).flatMap(w=>w.depts))].sort((a,b)=>a.localeCompare(b,"ja"));
+const fields = [
+  ["maleGeneral","男性大部屋","床"],["femaleGeneral","女性大部屋","床"],
+  ["maleSpecial4","男性特別4床室","床"],["femaleSpecial4","女性特別4床室","床"],
+  ["B","特別室B","室"],["A","特別室A","室"],["severe","重症個室","室"],
+  ["stopped","利用停止病床","床"]
+];
+let bedData = JSON.parse(localStorage.getItem("bedControlData") || "{}");
+let criticalData = JSON.parse(localStorage.getItem("bedControlCritical") || '{"3D":0,"3HCU":0,"3ICU":0}');
+let adjustmentHistory = JSON.parse(localStorage.getItem("bedControlHistory") || "[]");
+let morningSnapshot = JSON.parse(localStorage.getItem("bedControlMorningSnapshot") || "null");
+
+function totalCapacity(w){ return w.general+w.special4+w.B+w.A+w.severe; }
+function totalAvailable(d){
+  return (d.maleGeneral||0)+(d.femaleGeneral||0)+(d.maleSpecial4||0)+(d.femaleSpecial4||0)+(d.B||0)+(d.A||0)+(d.severe||0);
+}
+function getVal(id){ return Number(document.getElementById(id)?.value || 0); }
+
+
+
+function ageOptions(selected=0){
+  let s="";
+  for(let i=0;i<=120;i++){
+    s+=`<option value="${i}" ${Number(selected)===i?"selected":""}>${i}歳</option>`;
+  }
+  return s;
+}
+
+function numberOptions(max, selected=0){
+  let opts="";
+  for(let i=0;i<=max;i++){
+    opts+=`<option value="${i}" ${Number(selected)===i?"selected":""}>${i}</option>`;
+  }
+  return opts;
+}
+function fieldMax(w,key){
+  if(key==="maleGeneral" || key==="femaleGeneral") return w.general;
+  if(key==="maleSpecial4" || key==="femaleSpecial4") return w.special4;
+  if(key==="B") return w.B;
+  if(key==="A") return w.A;
+  if(key==="severe") return w.severe;
+  if(key==="stopped") return totalCapacity(w);
+  return totalCapacity(w);
+}
+function renderInputs(){
+  const root=document.getElementById("wardInputs"); root.innerHTML="";
+  Object.entries(wardMaster).forEach(([name,w])=>{
+    const d=bedData[name]||{};
+    const div=document.createElement("div"); div.className="ward";
+    div.innerHTML=`<div class="ward-head"><div class="ward-title">${name}</div>
+      <div class="summary">総病床 ${totalCapacity(w)}床｜大部屋 ${w.general}床｜特別4床室 ${w.special4}床｜B ${w.B}室｜A ${w.A}室｜重症個室 ${w.severe}室</div></div>
+      <div class="grid">${fields.map(([key,label,unit])=>`<div><label>${label}（${unit}）</label><select id="${name}-${key}">${numberOptions(fieldMax(w,key),d[key]??0)}</select></div>`).join("")}</div>
+      <div class="summary" id="${name}-calc" style="margin-top:10px"></div>`;
+    root.appendChild(div);
+    fields.forEach(([key])=>document.getElementById(`${name}-${key}`).addEventListener("input",()=>updateWardCalc(name)));
+    updateWardCalc(name);
+  });
+}
+function readWard(name){
+  const d={}; fields.forEach(([key])=>d[key]=getVal(`${name}-${key}`)); return d;
+}
+function updateWardCalc(name){
+  const w=wardMaster[name], d=readWard(name), avail=totalAvailable(d), usable=totalCapacity(w)-d.stopped, occupied=Math.max(0,usable-avail);
+  document.getElementById(`${name}-calc`).textContent=`空床合計 ${avail}床｜推定使用中 ${occupied}床｜稼働可能病床 ${usable}床`;
+}
+function saveBeds(){
+  Object.keys(wardMaster).forEach(n=>bedData[n]=readWard(n));
+  criticalData={"3D":getVal("critical-3D"),"3HCU":getVal("critical-3HCU"),"3ICU":getVal("critical-3ICU")};
+  localStorage.setItem("bedControlData",JSON.stringify(bedData));
+  localStorage.setItem("bedControlCritical",JSON.stringify(criticalData));
+
+  morningSnapshot={
+    bedData:JSON.parse(JSON.stringify(bedData)),
+    criticalData:JSON.parse(JSON.stringify(criticalData)),
+    savedAt:new Date().toISOString()
+  };
+  localStorage.setItem("bedControlMorningSnapshot",JSON.stringify(morningSnapshot));
+  adjustmentHistory=[];
+  localStorage.setItem("bedControlHistory",JSON.stringify(adjustmentHistory));
+
+  renderOverview();
+  renderHistory();
+  alert("朝の病床状況を保存しました。調整履歴をリセットしました。");
+}
+function roomAvailability(d, pref, sex){
+  if(pref==="general") return sex==="male" ? d.maleGeneral||0 : d.femaleGeneral||0;
+  if(pref==="special4") return sex==="male" ? d.maleSpecial4||0 : d.femaleSpecial4||0;
+  if(pref==="B") return d.B||0;
+  if(pref==="A") return d.A||0;
+  if(pref==="severe") return d.severe||0;
+  return totalAvailable(d);
+}
+function roomLabel(pref, sex){
+  const s=sex==="male"?"男性":"女性";
+  return {general:`${s}大部屋`,special4:`${s}特別4床室`,B:"特別室B",A:"特別室A",severe:"重症個室",any:"希望なし"}[pref];
+}
+
+function patientField(index,name){
+  return document.getElementById(`p${index}-${name}`);
+}
+function patientSummary(index){
+  return {
+    patientId:patientField(index,"patientId").value || "未入力",
+    patientName:patientField(index,"patientName").value || `患者${index+1}`,
+    department:patientField(index,"department").value,
+    diagnosis:patientField(index,"diagnosis").value || "",
+    sex:patientField(index,"sex").value,
+    age:patientField(index,"age").value
+  };
+}
+function judge(index){
+  saveBedsSilent();
+  const level=patientField(index,"careLevel").value;
+  const results=patientField(index,"results");
+  if(level==="critical"){
+    results.innerHTML=`<div class="result"><h3><span class="rank">対応先</span><span>3D病棟師長</span></h3>
+      <p>HCUまたはICUへの入院指示です。具体的な入室先は3D病棟師長へ患者情報を伝え、病棟側で調整します。</p>
+      <span class="tag">HCU空床 ${criticalData["3HCU"]||0}床</span><span class="tag">ICU空床 ${criticalData["3ICU"]||0}床</span>
+      <div class="actions">
+        <button class="confirm-btn" onclick="confirmCriticalAdjustment('3HCU',${index})">3HCUで調整確定</button>
+        <button class="confirm-btn" onclick="confirmCriticalAdjustment('3ICU',${index})">3ICUで調整確定</button>
+      </div></div>`;
+    return;
+  }
+  if(level==="3D"){
+    results.innerHTML=`<div class="result"><h3><span class="rank">候補</span><span>3D</span></h3>
+      <p>3Dへの入院指示です。現在の登録空床は <strong>${criticalData["3D"]||0}床</strong> です。</p>
+      <button class="confirm-btn" onclick="confirmCriticalAdjustment('3D',${index})">3Dで調整確定</button></div>`;
+    return;
+  }
+  const dept=patientField(index,"department").value;
+  const sex=patientField(index,"sex").value;
+  const pref=patientField(index,"roomPreference").value;
+  const candidates=[];
+  Object.entries(wardMaster).forEach(([name,w])=>{
+    const d=bedData[name]||{}, avail=roomAvailability(d,pref,sex), total=totalAvailable(d);
+    const isPrimary=w.depts.includes(dept);
+    const blocked=w.restricted && !isPrimary;
+    if(blocked || avail<=0) return;
+    let score=(isPrimary?1000:0)+total*10+avail;
+    candidates.push({name,w,d,avail,total,isPrimary,score});
+  });
+  candidates.sort((a,b)=>b.score-a.score);
+  if(!candidates.length){
+    results.innerHTML=`<div class="empty">条件に合う空床がありません。部屋希望の変更、利用停止床、病棟への個別確認が必要です。</div>`;
+    return;
+  }
+  results.innerHTML=candidates.slice(0,5).map((c,i)=>{
+    const reasons=[];
+    if(c.isPrimary) reasons.push(`${dept}の主病棟`);
+    else reasons.push(`主病棟に適合病床がない場合の代替候補`);
+    reasons.push(`${roomLabel(pref,sex)}の空き ${c.avail}${pref==="B"||pref==="A"||pref==="severe"?"室":"床"}`);
+    reasons.push(`病棟全体の空床 ${c.total}床`);
+    return `<div class="result"><h3><span class="rank">第${i+1}候補</span><span>${c.name}・${roomLabel(pref,sex)}</span></h3>
+      ${c.isPrimary?'<span class="tag">主病棟</span>':'<span class="tag warn">代替病棟</span>'}
+      <ul class="reason">${reasons.map(r=>`<li>${r}</li>`).join("")}</ul>
+      <button class="confirm-btn" onclick="confirmGeneralAdjustment('${c.name}','${pref}','${sex}',${index})">この候補で調整確定</button></div>`;
+  }).join("");
+}
+function roomDataKey(pref,sex){
+  if(pref==="general") return sex==="male" ? "maleGeneral" : "femaleGeneral";
+  if(pref==="special4") return sex==="male" ? "maleSpecial4" : "femaleSpecial4";
+  return pref;
+}
+function saveHistoryEntry(label, detail, beforeBeds, beforeCritical, patientIndex){
+  adjustmentHistory.unshift({
+    id:Date.now(),
+    time:new Date().toISOString(),
+    label,
+    detail,
+    patient:patientSummary(patientIndex),
+    beforeBeds,
+    beforeCritical,
+    afterBeds:JSON.parse(JSON.stringify(bedData)),
+    afterCritical:JSON.parse(JSON.stringify(criticalData))
+  });
+  localStorage.setItem("bedControlHistory",JSON.stringify(adjustmentHistory));
+  renderHistory();
+}
+function persistCurrentState(){
+  localStorage.setItem("bedControlData",JSON.stringify(bedData));
+  localStorage.setItem("bedControlCritical",JSON.stringify(criticalData));
+  renderInputs();
+  populateCriticalInputs();
+  renderOverview();
+}
+function confirmGeneralAdjustment(ward,pref,sex,patientIndex){
+  const key=roomDataKey(pref,sex);
+  if(pref==="any"){
+    alert("希望病室が「希望なし」の場合は、実際に使用する病室タイプを選択してから確定してください。");
+    return;
+  }
+  if(!bedData[ward] || Number(bedData[ward][key]||0)<=0){
+    alert("選択した病床に空きがありません。");
+    return;
+  }
+  const beforeBeds=JSON.parse(JSON.stringify(bedData));
+  const beforeCritical=JSON.parse(JSON.stringify(criticalData));
+  bedData[ward][key]=Number(bedData[ward][key])-1;
+  const detail=`${ward}・${roomLabel(pref,sex)}を1床使用`;
+  saveHistoryEntry(`${ward}で入院調整`,detail,beforeBeds,beforeCritical,patientIndex);
+  persistCurrentState();
+  patientField(patientIndex,"results").innerHTML=`<div class="result"><h3><span class="rank">調整確定</span><span>${ward}</span></h3><p>${detail}として空床数を自動更新しました。</p></div>`;
+}
+function confirmCriticalAdjustment(unit,patientIndex){
+  if(Number(criticalData[unit]||0)<=0){
+    alert(`${unit}に空床がありません。`);
+    return;
+  }
+  const beforeBeds=JSON.parse(JSON.stringify(bedData));
+  const beforeCritical=JSON.parse(JSON.stringify(criticalData));
+  criticalData[unit]=Number(criticalData[unit])-1;
+  const detail=`${unit}を1床使用`;
+  saveHistoryEntry(`${unit}で入院調整`,detail,beforeBeds,beforeCritical,patientIndex);
+  persistCurrentState();
+  patientField(patientIndex,"results").innerHTML=`<div class="result"><h3><span class="rank">調整確定</span><span>${unit}</span></h3><p>${detail}として空床数を自動更新しました。</p></div>`;
+}
+function formatDate(iso){
+  const d=new Date(iso);
+  return d.toLocaleString("ja-JP",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
+function restoreHistory(index){
+  const item=adjustmentHistory[index];
+  if(!item) return;
+  if(!confirm(`「${item.label}」の調整前の状態に戻しますか？\\nこの履歴より後の調整も取り消されます。`)) return;
+  bedData=JSON.parse(JSON.stringify(item.beforeBeds));
+  criticalData=JSON.parse(JSON.stringify(item.beforeCritical));
+  adjustmentHistory=adjustmentHistory.slice(index+1);
+  localStorage.setItem("bedControlHistory",JSON.stringify(adjustmentHistory));
+  persistCurrentState();
+  renderHistory();
+  alert("指定した時点の空床数に戻しました。");
+}
+function undoLatest(){
+  if(!adjustmentHistory.length){
+    alert("取り消せる調整履歴がありません。");
+    return;
+  }
+  restoreHistory(0);
+}
+function restoreMorning(){
+  if(!morningSnapshot){
+    alert("朝の病床状況が保存されていません。");
+    return;
+  }
+  if(!confirm("朝の入力直後の空床数に戻しますか？\\n本日の調整履歴はすべて取り消されます。")) return;
+  bedData=JSON.parse(JSON.stringify(morningSnapshot.bedData));
+  criticalData=JSON.parse(JSON.stringify(morningSnapshot.criticalData));
+  adjustmentHistory=[];
+  localStorage.setItem("bedControlHistory",JSON.stringify(adjustmentHistory));
+  persistCurrentState();
+  renderHistory();
+}
+function renderHistory(){
+  const root=document.getElementById("historyList");
+  if(!root) return;
+  let html=`<div class="actions" style="margin-bottom:14px">
+    <button class="btn btn-sub" onclick="restoreMorning()">朝の入力直後に戻す</button>
+  </div>`;
+  if(!adjustmentHistory.length){
+    root.innerHTML=html+`<div class="empty">まだ調整履歴はありません。</div>`;
+    return;
+  }
+  html+=adjustmentHistory.map((h,i)=>`
+    <div class="history-item">
+      <div class="history-top">
+        <div>
+          <strong>${h.label}</strong>
+          <div class="history-time">${formatDate(h.time)}</div>
+        </div>
+        <button class="mini-btn" onclick="restoreHistory(${i})">この調整前に戻す</button>
+      </div>
+      <div class="history-detail">${h.detail}</div>
+      <div class="summary">患者：${h.patient.patientName}／${h.patient.department}／${h.patient.age}歳</div>
+    </div>`).join("");
+  root.innerHTML=html;
+}
+
+function saveBedsSilent(){
+  Object.keys(wardMaster).forEach(n=>bedData[n]=readWard(n));
+  criticalData={"3D":getVal("critical-3D"),"3HCU":getVal("critical-3HCU"),"3ICU":getVal("critical-3ICU")};
+  localStorage.setItem("bedControlData",JSON.stringify(bedData)); localStorage.setItem("bedControlCritical",JSON.stringify(criticalData));
+}
+function renderOverview(){
+  let rows="";
+  Object.entries(wardMaster).forEach(([n,w])=>{
+    const d=bedData[n]||{}, avail=totalAvailable(d);
+    rows+=`<tr>
+      <td><strong>${n}</strong></td>
+      <td class="num">${d.maleGeneral||0}床</td>
+      <td class="num">${d.femaleGeneral||0}床</td>
+      <td class="num">${d.maleSpecial4||0}床</td>
+      <td class="num">${d.femaleSpecial4||0}床</td>
+      <td class="num">${d.B||0}室</td>
+      <td class="num">${d.A||0}室</td>
+      <td class="num">${d.severe||0}室</td>
+      <td class="num">${d.stopped||0}床</td>
+      <td class="num"><strong>${avail}床</strong></td>
+    </tr>`;
+  });
+  document.getElementById("overviewTable").innerHTML=`
+    <div style="overflow-x:auto"><table>
+      <thead><tr>
+        <th>病棟</th>
+        <th class="num">男大部屋</th>
+        <th class="num">女大部屋</th>
+        <th class="num">男特別4床室</th>
+        <th class="num">女特別4床室</th>
+        <th class="num">特別室B</th>
+        <th class="num">特別室A</th>
+        <th class="num">重症個室</th>
+        <th class="num">利用停止</th>
+        <th class="num">空床合計</th>
+      </tr></thead><tbody>${rows}</tbody>
+    </table></div>
+    <h3 style="margin-top:24px">3系病床</h3>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>病棟</th><th class="num">総病床</th><th class="num">空床</th></tr></thead>
+      <tbody>
+        <tr><td><strong>3D</strong></td><td class="num">20床</td><td class="num"><strong>${criticalData["3D"]||0}床</strong></td></tr>
+        <tr><td><strong>3HCU</strong></td><td class="num">16床</td><td class="num"><strong>${criticalData["3HCU"]||0}床</strong></td></tr>
+        <tr><td><strong>3ICU</strong></td><td class="num">12床</td><td class="num"><strong>${criticalData["3ICU"]||0}床</strong></td></tr>
+      </tbody>
+    </table></div>`;
+}
+
+function populateCriticalInputs(){
+  const settings=[["critical-3D",20,"3D"],["critical-3HCU",16,"3HCU"],["critical-3ICU",12,"3ICU"]];
+  settings.forEach(([id,max,key])=>{
+    const el=document.getElementById(id);
+    el.innerHTML=numberOptions(max,criticalData[key]||0);
+    el.value=criticalData[key]||0;
+  });
+}
+function patientFormHtml(index){
+  return `<div class="patient-form ${index===0?"active":""}" id="patient-form-${index}">
+    <div class="patient-title">緊急患者 ${index+1}</div>
+    <div class="grid">
+      <div><label>患者ID（テスト用）</label><input id="p${index}-patientId" placeholder="例：TEST-${String(index+1).padStart(3,"0")}"></div>
+      <div><label>患者氏名（テスト用）</label><input id="p${index}-patientName" placeholder="例：テスト患者"></div>
+      <div><label>診療科</label><select id="p${index}-department">${departments.map(d=>`<option>${d}</option>`).join("")}</select></div>
+      <div><label>性別</label><select id="p${index}-sex"><option value="male">男性</option><option value="female">女性</option></select></div>
+      <div><label>年齢</label><select id="p${index}-age">${ageOptions(0)}</select></div>
+      <div><label>必要病床区分</label>
+        <select id="p${index}-careLevel">
+          <option value="general">一般病棟</option><option value="3D">3D</option><option value="critical">HCU・ICU</option>
+        </select>
+      </div>
+      <div><label>希望病室</label>
+        <select id="p${index}-roomPreference">
+          <option value="any">希望なし</option><option value="general">大部屋</option><option value="special4">特別4床室</option>
+          <option value="B">特別室B</option><option value="A">特別室A</option><option value="severe">重症個室</option>
+        </select>
+      </div>
+      <div><label>認知症</label><select id="p${index}-dementia"><option>なし</option><option>あり</option><option>不明</option></select></div>
+      <div><label>ADL</label><select id="p${index}-adl"><option>自立</option><option>独歩</option><option>車椅子</option><option>ストレッチャー</option><option>寝たきり</option></select></div>
+      <div><label>酸素</label><select id="p${index}-oxygen"><option>なし</option><option>あり</option></select></div>
+      <div><label>NEWSスコア</label><select id="p${index}-news">${numberOptions(20,0)}</select></div>
+      <div><label>病名</label><input id="p${index}-diagnosis"></div>
+    </div>
+    <div style="margin-top:12px"><label>その他医療的情報・注意事項</label><textarea id="p${index}-notes"></textarea></div>
+    <div class="actions"><button class="btn btn-primary" onclick="judge(${index})">候補病棟を表示</button></div>
+    <div id="p${index}-results"></div>
+  </div>`;
+}
+function renderPatientForms(){
+  document.getElementById("patientTabs").innerHTML=Array.from({length:10},(_,i)=>
+    `<button class="patient-tab ${i===0?"active":""}" onclick="showPatient(${i})">患者${i+1}</button>`).join("");
+  document.getElementById("patientForms").innerHTML=Array.from({length:10},(_,i)=>patientFormHtml(i)).join("");
+}
+function showPatient(index){
+  document.querySelectorAll(".patient-tab").forEach((el,i)=>el.classList.toggle("active",i===index));
+  document.querySelectorAll(".patient-form").forEach((el,i)=>el.classList.toggle("active",i===index));
+}
+
+document.querySelectorAll(".tab-btn").forEach(b=>b.addEventListener("click",()=>{
+  
+function populateCriticalInputs(){
+  const settings=[["critical-3D",20,"3D"],["critical-3HCU",16,"3HCU"],["critical-3ICU",12,"3ICU"]];
+  settings.forEach(([id,max,key])=>{
+    const el=document.getElementById(id);
+    el.innerHTML=numberOptions(max,criticalData[key]||0);
+    el.value=criticalData[key]||0;
+  });
+}
+function patientFormHtml(index){
+  return `<div class="patient-form ${index===0?"active":""}" id="patient-form-${index}">
+    <div class="patient-title">緊急患者 ${index+1}</div>
+    <div class="grid">
+      <div><label>患者ID（テスト用）</label><input id="p${index}-patientId" placeholder="例：TEST-${String(index+1).padStart(3,"0")}"></div>
+      <div><label>患者氏名（テスト用）</label><input id="p${index}-patientName" placeholder="例：テスト患者"></div>
+      <div><label>診療科</label><select id="p${index}-department">${departments.map(d=>`<option>${d}</option>`).join("")}</select></div>
+      <div><label>性別</label><select id="p${index}-sex"><option value="male">男性</option><option value="female">女性</option></select></div>
+      <div><label>年齢</label><select id="p${index}-age">${ageOptions(0)}</select></div>
+      <div><label>必要病床区分</label>
+        <select id="p${index}-careLevel">
+          <option value="general">一般病棟</option><option value="3D">3D</option><option value="critical">HCU・ICU</option>
+        </select>
+      </div>
+      <div><label>希望病室</label>
+        <select id="p${index}-roomPreference">
+          <option value="any">希望なし</option><option value="general">大部屋</option><option value="special4">特別4床室</option>
+          <option value="B">特別室B</option><option value="A">特別室A</option><option value="severe">重症個室</option>
+        </select>
+      </div>
+      <div><label>認知症</label><select id="p${index}-dementia"><option>なし</option><option>あり</option><option>不明</option></select></div>
+      <div><label>ADL</label><select id="p${index}-adl"><option>自立</option><option>独歩</option><option>車椅子</option><option>ストレッチャー</option><option>寝たきり</option></select></div>
+      <div><label>酸素</label><select id="p${index}-oxygen"><option>なし</option><option>あり</option></select></div>
+      <div><label>NEWSスコア</label><select id="p${index}-news">${numberOptions(20,0)}</select></div>
+      <div><label>病名</label><input id="p${index}-diagnosis"></div>
+    </div>
+    <div style="margin-top:12px"><label>その他医療的情報・注意事項</label><textarea id="p${index}-notes"></textarea></div>
+    <div class="actions"><button class="btn btn-primary" onclick="judge(${index})">候補病棟を表示</button></div>
+    <div id="p${index}-results"></div>
+  </div>`;
+}
+function renderPatientForms(){
+  document.getElementById("patientTabs").innerHTML=Array.from({length:10},(_,i)=>
+    `<button class="patient-tab ${i===0?"active":""}" onclick="showPatient(${i})">患者${i+1}</button>`).join("");
+  document.getElementById("patientForms").innerHTML=Array.from({length:10},(_,i)=>patientFormHtml(i)).join("");
+}
+function showPatient(index){
+  document.querySelectorAll(".patient-tab").forEach((el,i)=>el.classList.toggle("active",i===index));
+  document.querySelectorAll(".patient-form").forEach((el,i)=>el.classList.toggle("active",i===index));
+}
+
+document.querySelectorAll(".tab-btn").forEach(x=>x.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active"); document.getElementById(b.dataset.tab).classList.add("active");
+  if(b.dataset.tab==="overview"){saveBedsSilent();renderOverview();}
+  if(b.dataset.tab==="history"){renderHistory();}
+}));
+document.getElementById("saveBeds").addEventListener("click",saveBeds);
+document.getElementById("undoLatest").addEventListener("click",undoLatest);
+document.getElementById("sampleBeds").addEventListener("click",()=>{
+  Object.keys(wardMaster).forEach((n,i)=>{
+    const vals={maleGeneral:2+(i%3),femaleGeneral:1+((i+1)%3),maleSpecial4:i%2,femaleSpecial4:(i+1)%2,B:1+(i%3),A:i%2,severe:i%2,stopped:i%2};
+    fields.forEach(([k])=>document.getElementById(`${n}-${k}`).value=vals[k]); updateWardCalc(n);
+  });
+  document.getElementById("critical-3D").value=2;document.getElementById("critical-3HCU").value=1;document.getElementById("critical-3ICU").value=1;
+});
+document.getElementById("clearBeds").addEventListener("click",()=>{
+  if(!confirm("入力済みの病床状況をすべてリセットしますか？")) return;
+  localStorage.removeItem("bedControlData");localStorage.removeItem("bedControlCritical");
+  localStorage.removeItem("bedControlHistory");localStorage.removeItem("bedControlMorningSnapshot");
+  bedData={};criticalData={"3D":0,"3HCU":0,"3ICU":0};adjustmentHistory=[];morningSnapshot=null;
+  renderInputs();populateCriticalInputs();renderOverview();renderHistory();
+});
+renderInputs();populateCriticalInputs();renderPatientForms();renderOverview();renderHistory();
+</script>
+</body>
+</html>
