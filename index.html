@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ベッドコントロールシステム（試作版）</title>
+  <title>ベッドコントロールシステム Ver.0.9（試作版）</title>
   <style>
     :root{
       --bg:#f4f7fb; --card:#fff; --text:#1f2937; --muted:#667085;
@@ -56,7 +56,7 @@
     .confirm-btn{margin-top:12px;background:var(--ok);color:#fff;border:0;border-radius:8px;padding:9px 13px;cursor:pointer;font-weight:800}
     .patient-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
     .patient-tab{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 12px;cursor:pointer;font-weight:700}
-    .patient-tab.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+    .patient-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
     .patient-form{display:none;border-top:1px solid var(--line);padding-top:16px}
     .patient-form.active{display:block}
     .patient-title{font-size:18px;font-weight:800;margin-bottom:12px}
@@ -73,6 +73,38 @@
     .occ-mid{background:#d49b22}
     .occ-high{background:#c84b3a}
     .accept-count{font-weight:800;color:var(--accent)}
+
+    .map-controls{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0 14px}
+    .ward-map-tabs{display:flex;gap:7px;flex-wrap:wrap}
+    .ward-map-tab{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:800}
+    .ward-map-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .map-legend{display:flex;gap:14px;align-items:center;font-size:13px;font-weight:700}
+    .legend-bed{width:20px;height:20px;border:1px solid #9ba8b7;border-radius:4px;display:inline-block;vertical-align:middle;margin-right:5px;background:#fff}
+    .legend-bed.occupied{background:#ef6b6b}
+    .map-summary{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+    .map-metric{background:#fbfdff;border:1px solid var(--line);border-radius:11px;padding:10px 12px}
+    .map-metric strong{display:block;font-size:22px;margin-top:3px}
+    .hospital-map{position:relative;min-height:610px;background:#fffef0;border:1px solid #e4ddb8;border-radius:13px;padding:14px;overflow:auto}
+    .map-canvas{position:relative;min-width:1030px;min-height:575px}
+    .map-zone{position:absolute;display:flex;gap:8px;align-items:flex-start}
+    .map-zone.top{left:8%;top:18px;right:7%;justify-content:center}
+    .map-zone.left{left:10px;top:140px;flex-direction:column}
+    .map-zone.right{right:10px;top:140px;flex-direction:column}
+    .map-zone.bottom{left:13%;right:13%;bottom:18px;justify-content:center}
+    .map-zone.center{left:38%;top:260px}
+    .nurse-station{width:245px;height:85px;border:1px solid #b8c8d9;background:#eef5fc;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#35516c}
+    .map-room{width:118px;border:1px solid #a8b4c3;border-radius:6px;background:#fff;overflow:hidden;flex:0 0 auto}
+    .map-room.compact{width:96px}
+    .map-room-head{padding:5px 7px;text-align:center;font-weight:900;background:#e8f1fa;border-bottom:1px solid #b3bfcc}
+    .map-room-type{text-align:center;font-size:11px;color:#59677a;padding:3px 4px;background:#f8fafc;border-bottom:1px solid #e3e8ef}
+    .map-beds{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;padding:7px}
+    .map-beds.single{grid-template-columns:1fr}
+    .map-bed{height:36px;border:1px solid #8f9cad;border-radius:5px;background:#fff;cursor:pointer;font-weight:800;color:#334155}
+    .map-bed.occupied{background:#ef6b6b;color:#5c1111;border-color:#ca4f4f}
+    .map-bed.recommended{outline:4px solid #1769aa;animation:mapPulse 1s infinite}
+    @keyframes mapPulse{50%{outline-color:#90c8ef}}
+    .map-help{font-size:13px;color:var(--muted);margin-top:10px}
+
     @media(max-width:900px){.grid,.grid-3{grid-template-columns:repeat(2,minmax(150px,1fr))}}
     @media(max-width:560px){.grid,.grid-3{grid-template-columns:1fr} header{position:static}}
   </style>
@@ -80,7 +112,7 @@
 <body>
 <header>
   <h1>小田原市立総合医療センター　ベッドコントロールシステム</h1>
-  <p>試作版 Ver.0.7｜データはこの端末のブラウザ内にのみ保存されます</p>
+  <p>試作版 Ver.0.9｜データはこの端末のブラウザ内にのみ保存されます</p>
 </header>
 <main>
   <div class="notice"><strong>テスト時の注意：</strong>実在する患者氏名・患者IDなどの個人情報は入力せず、架空データで操作してください。</div>
@@ -94,27 +126,21 @@
 
   <section id="beds" class="panel active">
     <div class="card">
-      <h2>朝の病床状況入力</h2>
-      <p class="summary">各病棟について、現在案内できる空床・空室数を入力してください。</p>
-      <div id="wardInputs"></div>
-
-      <div class="ward">
-        <div class="ward-head">
-          <div class="ward-title">3系病床</div>
-          <div class="summary">3D 20床｜3HCU 16床｜3ICU 12床</div>
-        </div>
-        <div class="grid-3">
-          <div><label>3D 空床（床）</label><select id="critical-3D"></select></div>
-          <div><label>3HCU 空床（床）</label><select id="critical-3HCU"></select></div>
-          <div><label>3ICU 空床（床）</label><select id="critical-3ICU"></select></div>
-        </div>
+      <h2>朝の空床マップ入力</h2>
+      <p class="summary">病棟マップ上の病床をタップしてください。白が空床、赤が使用中です。マップ操作は調整履歴には記録されません。</p>
+      <div class="map-controls">
+        <div id="wardMapTabs" class="ward-map-tabs"></div>
+        <div class="map-legend"><span><i class="legend-bed"></i>空床</span><span><i class="legend-bed occupied"></i>使用中</span></div>
       </div>
-
+      <div id="mapSummary" class="map-summary"></div>
+      <div id="hospitalMap" class="hospital-map"></div>
       <div class="actions">
-        <button class="btn btn-primary" id="saveBeds">病床状況を保存</button>
-        <button class="btn btn-sub" id="sampleBeds">サンプル値を入力</button>
+        <button class="btn btn-primary" id="saveBeds">朝の病床状況を保存</button>
+        <button class="btn btn-sub" id="allOccupied">表示中の病棟を全床使用中</button>
+        <button class="btn btn-sub" id="allVacant">表示中の病棟を全床空床</button>
         <button class="btn btn-danger" id="clearBeds">入力をリセット</button>
       </div>
+      <p class="map-help">病床配置は提供画像をもとにした簡略図です。病室タイプは登録済みですが、男女区分は今後設定します。</p>
     </div>
   </section>
 
@@ -164,14 +190,13 @@ const wardMaster = {
   "9W": {general:24, special4:8, B:7, A:2, severe:2, depts:["脳神経外科","脳神経内科"]}
 };
 const departments = [...new Set(Object.values(wardMaster).flatMap(w=>w.depts))].sort((a,b)=>a.localeCompare(b,"ja"));
-const fields = [
-  ["maleGeneral","男性大部屋","床"],["femaleGeneral","女性大部屋","床"],
-  ["maleSpecial4","男性特別4床室","床"],["femaleSpecial4","女性特別4床室","床"],
-  ["B","特別室B","室"],["A","特別室A","室"],["severe","重症個室","室"],
-  ["stopped","利用停止病床","床"]
-];
-let bedData = JSON.parse(localStorage.getItem("bedControlData") || "{}");
-let criticalData = JSON.parse(localStorage.getItem("bedControlCritical") || '{"3D":0,"3HCU":0,"3ICU":0}');
+const mapConfig = {"roomType": {"652": "general", "653": "general", "656": "general", "659": "general", "660": "general", "664": "general", "667": "general", "753": "general", "754": "general", "757": "general", "760": "general", "761": "general", "765": "general", "768": "general", "704": "general", "703": "general", "702": "general", "701": "general", "707": "general", "708": "general", "709": "general", "853": "general", "854": "general", "857": "general", "860": "general", "861": "general", "865": "general", "868": "general", "805": "general", "804": "general", "801": "general", "810": "general", "815": "general", "816": "general", "953": "general", "954": "general", "957": "general", "960": "general", "961": "general", "965": "general", "968": "general", "910": "general", "905": "general", "904": "general", "901": "general", "915": "general", "916": "general", "658": "special4", "759": "special4", "710": "special4", "859": "special4", "811": "special4", "812": "special4", "959": "special4", "911": "special4", "912": "special4", "651": "B", "654": "B", "655": "B", "662": "B", "665": "B", "666": "B", "668": "B", "669": "B", "751": "B", "752": "B", "755": "B", "756": "B", "763": "B", "766": "B", "767": "B", "769": "B", "770": "B", "705": "B", "712": "B", "713": "B", "714": "B", "717": "B", "851": "B", "852": "B", "855": "B", "856": "B", "870": "B", "869": "B", "867": "B", "866": "B", "863": "B", "808": "B", "806": "B", "803": "B", "802": "B", "814": "B", "817": "B", "818": "B", "970": "B", "969": "B", "967": "B", "966": "B", "963": "B", "956": "B", "955": "B", "952": "B", "951": "B", "902": "B", "903": "B", "906": "B", "908": "B", "914": "B", "917": "B", "918": "B", "657": "A", "663": "A", "758": "A", "764": "A", "706": "A", "711": "A", "858": "A", "864": "A", "807": "A", "813": "A", "958": "A", "964": "A", "907": "A", "913": "A", "661": "severe", "762": "severe", "716": "severe", "862": "severe", "809": "severe", "962": "severe", "909": "severe", "919": "severe", "819": "severe", "719": "severe", "718": "severe"}, "layouts": {"6E": {"top": ["663", "662", "661", "660", "659", "658", "657"], "left": ["664", "665", "666", "667", "668", "669"], "right": ["656", "655", "654", "653", "652", "651"], "bottom": []}, "7E": {"top": ["764", "763", "762", "761", "760", "759", "758"], "left": ["765", "766", "767", "768", "769", "770"], "right": ["757", "756", "755", "754", "753"], "bottom": ["751", "752"]}, "7W": {"top": ["705", "706", "707", "708", "709", "710", "711", "712", "713"], "left": ["704", "703", "702", "701"], "right": ["714", "716", "717", "718", "719"], "bottom": []}, "8E": {"top": ["864", "863", "862", "861", "860", "859", "858"], "left": ["865", "866", "867", "868", "869", "870"], "right": ["857", "856", "855", "854", "853", "852"], "bottom": ["851"]}, "8W": {"top": ["806", "807", "808", "809", "810", "811", "812", "813", "814"], "left": ["805", "804", "803", "802", "801"], "right": ["815", "816", "817", "818", "819"], "bottom": []}, "9E": {"top": ["964", "963", "962", "961", "960", "959", "958"], "left": ["965", "966", "967", "968", "969", "970"], "right": ["957", "956", "955", "954", "953", "952"], "bottom": ["951"]}, "9W": {"top": ["906", "907", "908", "909", "910", "911", "912", "913", "914"], "left": ["905", "904", "903", "902", "901"], "right": ["915", "916", "917", "918", "919"], "bottom": []}}, "critical": {"3D": 20, "3HCU": 16, "3ICU": 12}};
+const roomTypeLabels={general:"大部屋",special4:"特別4床室",B:"特別室B",A:"特別室A",severe:"重症個室"};
+const roomBedCounts={general:4,special4:4,B:1,A:1,severe:1};
+let currentMapWard="6E";
+let mapState=JSON.parse(localStorage.getItem("bedControlMapState")||"null");
+let bedData={};
+let criticalData={"3D":0,"3HCU":0,"3ICU":0};
 let adjustmentHistory = JSON.parse(localStorage.getItem("bedControlHistory") || "[]");
 let morningSnapshot = JSON.parse(localStorage.getItem("bedControlMorningSnapshot") || "null");
 
@@ -207,46 +232,76 @@ function fieldMax(w,key){
   if(key==="stopped") return totalCapacity(w);
   return totalCapacity(w);
 }
-function renderInputs(){
-  const root=document.getElementById("wardInputs"); root.innerHTML="";
-  Object.entries(wardMaster).forEach(([name,w])=>{
-    const d=bedData[name]||{};
-    const div=document.createElement("div"); div.className="ward";
-    div.innerHTML=`<div class="ward-head"><div class="ward-title">${name}</div>
-      <div class="summary">総病床 ${totalCapacity(w)}床｜大部屋 ${w.general}床｜特別4床室 ${w.special4}床｜B ${w.B}室｜A ${w.A}室｜重症個室 ${w.severe}室</div></div>
-      <div class="grid">${fields.map(([key,label,unit])=>`<div><label>${label}（${unit}）</label><select id="${name}-${key}">${numberOptions(fieldMax(w,key),d[key]??0)}</select></div>`).join("")}</div>
-      <div class="summary" id="${name}-calc" style="margin-top:10px"></div>`;
-    root.appendChild(div);
-    fields.forEach(([key])=>document.getElementById(`${name}-${key}`).addEventListener("input",()=>updateWardCalc(name)));
-    updateWardCalc(name);
+
+function createDefaultMapState(){
+  const s={wards:{},critical:{}};
+  Object.entries(mapConfig.layouts).forEach(([ward,zones])=>{
+    s.wards[ward]={};
+    [...zones.top,...zones.left,...zones.right,...zones.bottom].forEach(room=>{
+      const type=mapConfig.roomType[room];
+      s.wards[ward][room]=Array.from({length:roomBedCounts[type]},(_,i)=>({id:`${room}-${i+1}`,occupied:true}));
+    });
   });
+  Object.entries(mapConfig.critical).forEach(([ward,cap])=>s.critical[ward]=Array.from({length:cap},(_,i)=>({id:`${ward}-${i+1}`,occupied:true})));
+  return s;
 }
-function readWard(name){
-  const d={}; fields.forEach(([key])=>d[key]=getVal(`${name}-${key}`)); return d;
+if(!mapState) mapState=createDefaultMapState();
+function cloneData(v){return JSON.parse(JSON.stringify(v));}
+function allMapBeds(ward){return mapConfig.critical[ward]?mapState.critical[ward]:Object.values(mapState.wards[ward]||{}).flat();}
+function mapCount(ward){const beds=allMapBeds(ward),occupied=beds.filter(b=>b.occupied).length;return{total:beds.length,occupied,vacant:beds.length-occupied,rate:beds.length?Math.round(occupied/beds.length*100):0};}
+function aggregateFromMap(){
+  bedData={};
+  Object.keys(wardMaster).forEach(ward=>{
+    const d={maleGeneral:0,femaleGeneral:0,maleSpecial4:0,femaleSpecial4:0,B:0,A:0,severe:0,stopped:0};
+    Object.entries(mapState.wards[ward]||{}).forEach(([room,beds])=>{
+      const vacant=beds.filter(b=>!b.occupied).length,type=mapConfig.roomType[room];
+      if(type==='general') d.maleGeneral+=vacant;
+      if(type==='special4') d.maleSpecial4+=vacant;
+      if(type==='B') d.B+=vacant;
+      if(type==='A') d.A+=vacant;
+      if(type==='severe') d.severe+=vacant;
+    });
+    bedData[ward]=d;
+  });
+  Object.keys(mapConfig.critical).forEach(w=>criticalData[w]=mapState.critical[w].filter(b=>!b.occupied).length);
 }
-function updateWardCalc(name){
-  const w=wardMaster[name], d=readWard(name), avail=totalAvailable(d), usable=totalCapacity(w)-d.stopped, occupied=Math.max(0,usable-avail);
-  document.getElementById(`${name}-calc`).textContent=`空床合計 ${avail}床｜推定使用中 ${occupied}床｜稼働可能病床 ${usable}床`;
+function persistMap(){aggregateFromMap();localStorage.setItem('bedControlMapState',JSON.stringify(mapState));localStorage.setItem('bedControlData',JSON.stringify(bedData));localStorage.setItem('bedControlCritical',JSON.stringify(criticalData));}
+function renderInputs(){renderWardMapTabs();renderMap();}
+function renderWardMapTabs(){
+  const wards=[...Object.keys(mapConfig.layouts),...Object.keys(mapConfig.critical)];
+  document.getElementById('wardMapTabs').innerHTML=wards.map(w=>`<button class="ward-map-tab ${w===currentMapWard?'active':''}" data-map-ward="${w}">${w}</button>`).join('');
+  document.querySelectorAll('[data-map-ward]').forEach(b=>b.addEventListener('click',()=>{currentMapWard=b.dataset.mapWard;renderWardMapTabs();renderMap();}));
 }
+function roomHtml(ward,room){
+  const type=mapConfig.roomType[room],beds=mapState.wards[ward][room];
+  return `<div class="map-room ${beds.length===1?'compact':''}"><div class="map-room-head">${room}</div><div class="map-room-type">${roomTypeLabels[type]}</div><div class="map-beds ${beds.length===1?'single':''}">${beds.map(b=>`<button type="button" class="map-bed ${b.occupied?'occupied':''}" data-bed-id="${b.id}" data-room="${room}">${b.id.split('-').pop()}</button>`).join('')}</div></div>`;
+}
+function renderMap(){
+  const c=mapCount(currentMapWard);
+  document.getElementById('mapSummary').innerHTML=`<div class="map-metric">総病床<strong>${c.total}床</strong></div><div class="map-metric">使用中<strong>${c.occupied}床</strong></div><div class="map-metric">空床<strong>${c.vacant}床</strong></div><div class="map-metric">稼働率<strong>${c.rate}％</strong></div>`;
+  const root=document.getElementById('hospitalMap');
+  if(mapConfig.critical[currentMapWard]){
+    root.innerHTML=`<div class="map-canvas"><div class="map-zone top" style="flex-wrap:wrap;left:4%;right:4%">${mapState.critical[currentMapWard].map(b=>`<div class="map-room compact"><div class="map-room-head">${b.id}</div><div class="map-beds single"><button type="button" class="map-bed ${b.occupied?'occupied':''}" data-bed-id="${b.id}" data-room="critical">1</button></div></div>`).join('')}</div></div>`;
+  }else{
+    const z=mapConfig.layouts[currentMapWard];
+    root.innerHTML=`<div class="map-canvas"><div class="map-zone top">${z.top.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone left">${z.left.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone right">${z.right.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone bottom">${z.bottom.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone center"><div class="nurse-station">ナースステーション</div></div></div>`;
+  }
+  root.querySelectorAll('.map-bed').forEach(b=>b.addEventListener('click',()=>toggleMapBed(b.dataset.room,b.dataset.bedId)));
+}
+function toggleMapBed(room,id){
+  const bed=mapConfig.critical[currentMapWard]?mapState.critical[currentMapWard].find(b=>b.id===id):mapState.wards[currentMapWard][room].find(b=>b.id===id);
+  bed.occupied=!bed.occupied;
+  persistMap();renderMap();renderOverview();
+}
+function setCurrentWardAll(occupied){allMapBeds(currentMapWard).forEach(b=>b.occupied=occupied);persistMap();renderMap();renderOverview();}
 function saveBeds(){
-  Object.keys(wardMaster).forEach(n=>bedData[n]=readWard(n));
-  criticalData={"3D":getVal("critical-3D"),"3HCU":getVal("critical-3HCU"),"3ICU":getVal("critical-3ICU")};
-  localStorage.setItem("bedControlData",JSON.stringify(bedData));
-  localStorage.setItem("bedControlCritical",JSON.stringify(criticalData));
-
-  morningSnapshot={
-    bedData:JSON.parse(JSON.stringify(bedData)),
-    criticalData:JSON.parse(JSON.stringify(criticalData)),
-    savedAt:new Date().toISOString()
-  };
-  localStorage.setItem("bedControlMorningSnapshot",JSON.stringify(morningSnapshot));
-  adjustmentHistory=[];
-  localStorage.setItem("bedControlHistory",JSON.stringify(adjustmentHistory));
-
-  renderOverview();
-  renderHistory();
-  alert("朝の病床状況を保存しました。調整履歴をリセットしました。");
+  persistMap();
+  morningSnapshot={mapState:cloneData(mapState),bedData:cloneData(bedData),criticalData:cloneData(criticalData),savedAt:new Date().toISOString()};
+  localStorage.setItem('bedControlMorningSnapshot',JSON.stringify(morningSnapshot));
+  adjustmentHistory=[];localStorage.setItem('bedControlHistory',JSON.stringify(adjustmentHistory));
+  renderOverview();renderHistory();alert('朝の病床状況を保存しました。調整履歴をリセットしました。');
 }
+
 function roomAvailability(d, pref, sex){
   if(pref==="general") return sex==="male" ? d.maleGeneral||0 : d.femaleGeneral||0;
   if(pref==="special4") return sex==="male" ? d.maleSpecial4||0 : d.femaleSpecial4||0;
@@ -259,6 +314,18 @@ function roomLabel(pref, sex){
   const s=sex==="male"?"男性":"女性";
   return {general:`${s}大部屋`,special4:`${s}特別4床室`,B:"特別室B",A:"特別室A",severe:"重症個室",any:"希望なし"}[pref];
 }
+
+
+function occupyFirstMatchingBed(ward,pref){
+  if(!mapState.wards[ward]) return;
+  const targetType=pref==='any'?null:pref;
+  for(const [room,beds] of Object.entries(mapState.wards[ward])){
+    if(targetType && mapConfig.roomType[room]!==targetType) continue;
+    const bed=beds.find(b=>!b.occupied);if(bed){bed.occupied=true;return bed.id;}
+  }
+  return '';
+}
+function occupyCriticalBed(unit){const bed=(mapState.critical[unit]||[]).find(b=>!b.occupied);if(bed){bed.occupied=true;return bed.id;}return '';}
 
 function patientField(index,name){
   return document.getElementById(`p${index}-${name}`);
@@ -327,7 +394,7 @@ function roomDataKey(pref,sex){
   if(pref==="special4") return sex==="male" ? "maleSpecial4" : "femaleSpecial4";
   return pref;
 }
-function saveHistoryEntry(label, detail, beforeBeds, beforeCritical, patientIndex, destination){
+function saveHistoryEntry(label, detail, beforeBeds, beforeCritical, beforeMap, patientIndex, destination){
   adjustmentHistory.unshift({
     id:Date.now(),
     time:new Date().toISOString(),
@@ -337,19 +404,14 @@ function saveHistoryEntry(label, detail, beforeBeds, beforeCritical, patientInde
     patient:patientSummary(patientIndex),
     beforeBeds,
     beforeCritical,
+    beforeMap,
     afterBeds:JSON.parse(JSON.stringify(bedData)),
     afterCritical:JSON.parse(JSON.stringify(criticalData))
   });
   localStorage.setItem("bedControlHistory",JSON.stringify(adjustmentHistory));
   renderHistory();
 }
-function persistCurrentState(){
-  localStorage.setItem("bedControlData",JSON.stringify(bedData));
-  localStorage.setItem("bedControlCritical",JSON.stringify(criticalData));
-  renderInputs();
-  populateCriticalInputs();
-  renderOverview();
-}
+function persistCurrentState(){persistMap();renderMap();renderOverview();}
 function confirmGeneralAdjustment(ward,pref,sex,patientIndex){
   const key=roomDataKey(pref,sex);
   if(pref==="any"){
@@ -360,12 +422,13 @@ function confirmGeneralAdjustment(ward,pref,sex,patientIndex){
     alert("選択した病床に空きがありません。");
     return;
   }
-  const beforeBeds=JSON.parse(JSON.stringify(bedData));
+  const beforeBeds=JSON.parse(JSON.stringify(bedData)); const beforeMap=cloneData(mapState);
   const beforeCritical=JSON.parse(JSON.stringify(criticalData));
-  bedData[ward][key]=Number(bedData[ward][key])-1;
-  const detail=`${ward}・${roomLabel(pref,sex)}を1床使用`;
-  saveHistoryEntry(`${ward}で入院調整`,detail,beforeBeds,beforeCritical,patientIndex,ward);
-  persistCurrentState();
+  const assignedBed=occupyFirstMatchingBed(ward,pref);
+  persistMap();
+  const detail=`${ward}・${roomLabel(pref,sex)}を1床使用${assignedBed?`（${assignedBed}）`:``}`;
+  saveHistoryEntry(`${ward}で入院調整`,detail,beforeBeds,beforeCritical,beforeMap,patientIndex,ward);
+  renderMap();renderOverview();
   patientField(patientIndex,"results").innerHTML=`<div class="result"><h3><span class="rank">調整確定</span><span>${ward}</span></h3><p>${detail}として空床数を自動更新しました。</p></div>`;
 }
 function confirmCriticalAdjustment(unit,patientIndex){
@@ -373,12 +436,13 @@ function confirmCriticalAdjustment(unit,patientIndex){
     alert(`${unit}に空床がありません。`);
     return;
   }
-  const beforeBeds=JSON.parse(JSON.stringify(bedData));
+  const beforeBeds=JSON.parse(JSON.stringify(bedData)); const beforeMap=cloneData(mapState);
   const beforeCritical=JSON.parse(JSON.stringify(criticalData));
-  criticalData[unit]=Number(criticalData[unit])-1;
-  const detail=`${unit}を1床使用`;
-  saveHistoryEntry(`${unit}で入院調整`,detail,beforeBeds,beforeCritical,patientIndex,unit);
-  persistCurrentState();
+  const assignedBed=occupyCriticalBed(unit);
+  persistMap();
+  const detail=`${unit}を1床使用${assignedBed?`（${assignedBed}）`:``}`;
+  saveHistoryEntry(`${unit}で入院調整`,detail,beforeBeds,beforeCritical,beforeMap,patientIndex,unit);
+  renderMap();renderOverview();
   patientField(patientIndex,"results").innerHTML=`<div class="result"><h3><span class="rank">調整確定</span><span>${unit}</span></h3><p>${detail}として空床数を自動更新しました。</p></div>`;
 }
 function formatDate(iso){
@@ -391,9 +455,12 @@ function restoreHistory(index){
   if(!confirm(`「${item.label}」の調整前の状態に戻しますか？\\nこの履歴より後の調整も取り消されます。`)) return;
   bedData=JSON.parse(JSON.stringify(item.beforeBeds));
   criticalData=JSON.parse(JSON.stringify(item.beforeCritical));
+  if(item.beforeMap) mapState=cloneData(item.beforeMap);
   adjustmentHistory=adjustmentHistory.slice(index+1);
   localStorage.setItem("bedControlHistory",JSON.stringify(adjustmentHistory));
-  persistCurrentState();
+  persistMap();
+  renderMap();
+  renderOverview();
   renderHistory();
   alert("指定した時点の空床数に戻しました。");
 }
@@ -405,17 +472,11 @@ function undoLatest(){
   restoreHistory(0);
 }
 function restoreMorning(){
-  if(!morningSnapshot){
-    alert("朝の病床状況が保存されていません。");
-    return;
-  }
-  if(!confirm("朝の入力直後の空床数に戻しますか？\\n本日の調整履歴はすべて取り消されます。")) return;
-  bedData=JSON.parse(JSON.stringify(morningSnapshot.bedData));
-  criticalData=JSON.parse(JSON.stringify(morningSnapshot.criticalData));
-  adjustmentHistory=[];
-  localStorage.setItem("bedControlHistory",JSON.stringify(adjustmentHistory));
-  persistCurrentState();
-  renderHistory();
+  if(!morningSnapshot){alert("朝の病床状況が保存されていません。");return;}
+  if(!confirm("朝の入力直後の空床数に戻しますか？\n本日の調整履歴はすべて取り消されます。")) return;
+  if(morningSnapshot.mapState) mapState=cloneData(morningSnapshot.mapState);
+  bedData=cloneData(morningSnapshot.bedData||{});criticalData=cloneData(morningSnapshot.criticalData||{});
+  adjustmentHistory=[];localStorage.setItem("bedControlHistory",JSON.stringify(adjustmentHistory));persistMap();renderMap();renderOverview();renderHistory();
 }
 function renderHistory(){
   const root=document.getElementById("historyList");
@@ -442,11 +503,7 @@ function renderHistory(){
   root.innerHTML=html;
 }
 
-function saveBedsSilent(){
-  Object.keys(wardMaster).forEach(n=>bedData[n]=readWard(n));
-  criticalData={"3D":getVal("critical-3D"),"3HCU":getVal("critical-3HCU"),"3ICU":getVal("critical-3ICU")};
-  localStorage.setItem("bedControlData",JSON.stringify(bedData)); localStorage.setItem("bedControlCritical",JSON.stringify(criticalData));
-}
+function saveBedsSilent(){persistMap();}
 function isToday(iso){
   const d=new Date(iso), now=new Date();
   return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
@@ -516,14 +573,7 @@ function renderOverview(){
     ${criticalCards}`;
 }
 
-function populateCriticalInputs(){
-  const settings=[["critical-3D",20,"3D"],["critical-3HCU",16,"3HCU"],["critical-3ICU",12,"3ICU"]];
-  settings.forEach(([id,max,key])=>{
-    const el=document.getElementById(id);
-    el.innerHTML=numberOptions(max,criticalData[key]||0);
-    el.value=criticalData[key]||0;
-  });
-}
+function populateCriticalInputs(){}
 function patientFormHtml(index){
   return `<div class="patient-form ${index===0?"active":""}" id="patient-form-${index}">
     <div class="patient-title">緊急患者 ${index+1}</div>
@@ -575,21 +625,12 @@ document.querySelectorAll(".tab-btn").forEach(b=>b.addEventListener("click",()=>
 }));
 document.getElementById("saveBeds").addEventListener("click",saveBeds);
 document.getElementById("undoLatest").addEventListener("click",undoLatest);
-document.getElementById("sampleBeds").addEventListener("click",()=>{
-  Object.keys(wardMaster).forEach((n,i)=>{
-    const vals={maleGeneral:2+(i%3),femaleGeneral:1+((i+1)%3),maleSpecial4:i%2,femaleSpecial4:(i+1)%2,B:1+(i%3),A:i%2,severe:i%2,stopped:i%2};
-    fields.forEach(([k])=>document.getElementById(`${n}-${k}`).value=vals[k]); updateWardCalc(n);
-  });
-  document.getElementById("critical-3D").value=2;
-  document.getElementById("critical-3HCU").value=1;
-  document.getElementById("critical-3ICU").value=1;
-});
+document.getElementById("allOccupied").addEventListener("click",()=>setCurrentWardAll(true));
+document.getElementById("allVacant").addEventListener("click",()=>setCurrentWardAll(false));
 document.getElementById("clearBeds").addEventListener("click",()=>{
-  if(!confirm("入力済みの病床状況をすべてリセットしますか？")) return;
-  localStorage.removeItem("bedControlData");localStorage.removeItem("bedControlCritical");
-  localStorage.removeItem("bedControlHistory");localStorage.removeItem("bedControlMorningSnapshot");
-  bedData={};criticalData={"3D":0,"3HCU":0,"3ICU":0};adjustmentHistory=[];morningSnapshot=null;
-  renderInputs();populateCriticalInputs();renderOverview();renderHistory();
+  if(!confirm("病床マップを全床使用中の初期状態に戻しますか？")) return;
+  mapState=createDefaultMapState();bedData={};criticalData={"3D":0,"3HCU":0,"3ICU":0};adjustmentHistory=[];morningSnapshot=null;
+  localStorage.removeItem("bedControlMorningSnapshot");localStorage.removeItem("bedControlHistory");persistMap();renderInputs();renderOverview();renderHistory();
 });
 renderInputs();
 populateCriticalInputs();
