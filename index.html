@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ベッドコントロールシステム Ver.0.9（試作版）</title>
+  <title>ベッドコントロールシステム Ver.0.9.1（試作版）</title>
   <style>
     :root{
       --bg:#f4f7fb; --card:#fff; --text:#1f2937; --muted:#667085;
@@ -80,7 +80,7 @@
     .ward-map-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
     .map-legend{display:flex;gap:14px;align-items:center;font-size:13px;font-weight:700}
     .legend-bed{width:20px;height:20px;border:1px solid #9ba8b7;border-radius:4px;display:inline-block;vertical-align:middle;margin-right:5px;background:#fff}
-    .legend-bed.occupied{background:#ef6b6b}
+    .legend-bed.male{background:#4f8fe8}.legend-bed.female{background:#ef6b6b}.legend-bed.found{background:#54c878}
     .map-summary{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:10px;margin-bottom:14px}
     .map-metric{background:#fbfdff;border:1px solid var(--line);border-radius:11px;padding:10px 12px}
     .map-metric strong{display:block;font-size:22px;margin-top:3px}
@@ -100,10 +100,18 @@
     .map-beds{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;padding:7px}
     .map-beds.single{grid-template-columns:1fr}
     .map-bed{height:36px;border:1px solid #8f9cad;border-radius:5px;background:#fff;cursor:pointer;font-weight:800;color:#334155}
-    .map-bed.occupied{background:#ef6b6b;color:#5c1111;border-color:#ca4f4f}
+    .map-bed.male{background:#4f8fe8;color:#fff;border-color:#2f6fc8}
+    .map-bed.female{background:#ef6b6b;color:#fff;border-color:#ca4f4f}
+    .map-bed.found{background:#54c878!important;color:#083b1a!important;border-color:#258c48!important;outline:4px solid #9de6b5}
     .map-bed.recommended{outline:4px solid #1769aa;animation:mapPulse 1s infinite}
     @keyframes mapPulse{50%{outline-color:#90c8ef}}
     .map-help{font-size:13px;color:var(--muted);margin-top:10px}
+    .search-panel{display:none;background:#f3faf5;border:1px solid #b9dfc4;border-radius:11px;padding:13px;margin:12px 0}.search-panel.open{display:block}
+    .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(15,23,42,.52);z-index:100;align-items:center;justify-content:center;padding:18px}.modal-backdrop.open{display:flex}
+    .modal-card{background:#fff;border-radius:15px;padding:20px;max-width:900px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+    .modal-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px}.modal-close{border:0;background:#eef2f6;border-radius:8px;padding:8px 11px;cursor:pointer;font-weight:800}
+    .accept-count{cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+    .detail-list{margin:8px 0 0;padding-left:20px}.transfer-hint{font-size:12px;color:var(--muted);margin-top:8px}
 
     @media(max-width:900px){.grid,.grid-3{grid-template-columns:repeat(2,minmax(150px,1fr))}}
     @media(max-width:560px){.grid,.grid-3{grid-template-columns:1fr} header{position:static}}
@@ -112,7 +120,7 @@
 <body>
 <header>
   <h1>小田原市立総合医療センター　ベッドコントロールシステム</h1>
-  <p>試作版 Ver.0.9｜データはこの端末のブラウザ内にのみ保存されます</p>
+  <p>試作版 Ver.0.9.1｜データはこの端末のブラウザ内にのみ保存されます</p>
 </header>
 <main>
   <div class="notice"><strong>テスト時の注意：</strong>実在する患者氏名・患者IDなどの個人情報は入力せず、架空データで操作してください。</div>
@@ -127,20 +135,24 @@
   <section id="beds" class="panel active">
     <div class="card">
       <h2>朝の空床マップ入力</h2>
-      <p class="summary">病棟マップ上の病床をタップしてください。白が空床、赤が使用中です。マップ操作は調整履歴には記録されません。</p>
+      <p class="summary">病棟マップ上の病床をタップしてください。白＝空床、青＝男性、赤＝女性です。マップ操作は調整履歴には記録されません。</p>
       <div class="map-controls">
         <div id="wardMapTabs" class="ward-map-tabs"></div>
-        <div class="map-legend"><span><i class="legend-bed"></i>空床</span><span><i class="legend-bed occupied"></i>使用中</span></div>
+        <div class="map-legend"><span><i class="legend-bed"></i>空床</span><span><i class="legend-bed male"></i>男性</span><span><i class="legend-bed female"></i>女性</span><span><i class="legend-bed found"></i>検索結果</span></div>
+      </div>
+      <div class="actions" style="margin:0 0 12px"><button class="btn btn-sub" id="toggleSearch">空床検索</button></div>
+      <div id="searchPanel" class="search-panel">
+        <div class="grid-3"><div><label>個室タイプ</label><select id="searchRoomType"><option value="general">大部屋</option><option value="special4">4人床</option><option value="B">特別室B</option><option value="A">特別室A</option></select></div><div><label>性別</label><select id="searchSex"><option value="male">男性</option><option value="female">女性</option></select></div><div class="actions" style="align-items:end"><button class="btn btn-primary" id="runSearch">検索する</button><button class="btn btn-sub" id="clearSearch">解除</button></div></div>
       </div>
       <div id="mapSummary" class="map-summary"></div>
       <div id="hospitalMap" class="hospital-map"></div>
       <div class="actions">
         <button class="btn btn-primary" id="saveBeds">朝の病床状況を保存</button>
-        <button class="btn btn-sub" id="allOccupied">表示中の病棟を全床使用中</button>
+        <button class="btn btn-sub" id="allMale">表示中を全床男性</button><button class="btn btn-sub" id="allFemale">表示中を全床女性</button>
         <button class="btn btn-sub" id="allVacant">表示中の病棟を全床空床</button>
         <button class="btn btn-danger" id="clearBeds">入力をリセット</button>
       </div>
-      <p class="map-help">病床配置は提供画像をもとにした簡略図です。病室タイプは登録済みですが、男女区分は今後設定します。</p>
+      <p class="map-help">病床配置は提供画像をもとにした簡略図です。病床を右クリック（スマートフォンは長押し）すると、その病床からの転出調整を開始できます。</p>
     </div>
   </section>
 
@@ -190,7 +202,7 @@ const wardMaster = {
   "9W": {general:24, special4:8, B:7, A:2, severe:2, depts:["脳神経外科","脳神経内科"]}
 };
 const departments = [...new Set(Object.values(wardMaster).flatMap(w=>w.depts))].sort((a,b)=>a.localeCompare(b,"ja"));
-const mapConfig = {"roomType": {"652": "general", "653": "general", "656": "general", "659": "general", "660": "general", "664": "general", "667": "general", "753": "general", "754": "general", "757": "general", "760": "general", "761": "general", "765": "general", "768": "general", "704": "general", "703": "general", "702": "general", "701": "general", "707": "general", "708": "general", "709": "general", "853": "general", "854": "general", "857": "general", "860": "general", "861": "general", "865": "general", "868": "general", "805": "general", "804": "general", "801": "general", "810": "general", "815": "general", "816": "general", "953": "general", "954": "general", "957": "general", "960": "general", "961": "general", "965": "general", "968": "general", "910": "general", "905": "general", "904": "general", "901": "general", "915": "general", "916": "general", "658": "special4", "759": "special4", "710": "special4", "859": "special4", "811": "special4", "812": "special4", "959": "special4", "911": "special4", "912": "special4", "651": "B", "654": "B", "655": "B", "662": "B", "665": "B", "666": "B", "668": "B", "669": "B", "751": "B", "752": "B", "755": "B", "756": "B", "763": "B", "766": "B", "767": "B", "769": "B", "770": "B", "705": "B", "712": "B", "713": "B", "714": "B", "717": "B", "851": "B", "852": "B", "855": "B", "856": "B", "870": "B", "869": "B", "867": "B", "866": "B", "863": "B", "808": "B", "806": "B", "803": "B", "802": "B", "814": "B", "817": "B", "818": "B", "970": "B", "969": "B", "967": "B", "966": "B", "963": "B", "956": "B", "955": "B", "952": "B", "951": "B", "902": "B", "903": "B", "906": "B", "908": "B", "914": "B", "917": "B", "918": "B", "657": "A", "663": "A", "758": "A", "764": "A", "706": "A", "711": "A", "858": "A", "864": "A", "807": "A", "813": "A", "958": "A", "964": "A", "907": "A", "913": "A", "661": "severe", "762": "severe", "716": "severe", "862": "severe", "809": "severe", "962": "severe", "909": "severe", "919": "severe", "819": "severe", "719": "severe", "718": "severe"}, "layouts": {"6E": {"top": ["663", "662", "661", "660", "659", "658", "657"], "left": ["664", "665", "666", "667", "668", "669"], "right": ["656", "655", "654", "653", "652", "651"], "bottom": []}, "7E": {"top": ["764", "763", "762", "761", "760", "759", "758"], "left": ["765", "766", "767", "768", "769", "770"], "right": ["757", "756", "755", "754", "753"], "bottom": ["751", "752"]}, "7W": {"top": ["705", "706", "707", "708", "709", "710", "711", "712", "713"], "left": ["704", "703", "702", "701"], "right": ["714", "716", "717", "718", "719"], "bottom": []}, "8E": {"top": ["864", "863", "862", "861", "860", "859", "858"], "left": ["865", "866", "867", "868", "869", "870"], "right": ["857", "856", "855", "854", "853", "852"], "bottom": ["851"]}, "8W": {"top": ["806", "807", "808", "809", "810", "811", "812", "813", "814"], "left": ["805", "804", "803", "802", "801"], "right": ["815", "816", "817", "818", "819"], "bottom": []}, "9E": {"top": ["964", "963", "962", "961", "960", "959", "958"], "left": ["965", "966", "967", "968", "969", "970"], "right": ["957", "956", "955", "954", "953", "952"], "bottom": ["951"]}, "9W": {"top": ["906", "907", "908", "909", "910", "911", "912", "913", "914"], "left": ["905", "904", "903", "902", "901"], "right": ["915", "916", "917", "918", "919"], "bottom": []}}, "critical": {"3D": 20, "3HCU": 16, "3ICU": 12}};
+const mapConfig = {"roomType": {"652": "general", "653": "general", "656": "general", "659": "general", "660": "general", "664": "general", "667": "general", "753": "general", "754": "general", "757": "general", "760": "general", "761": "general", "765": "general", "768": "general", "704": "general", "703": "general", "702": "general", "701": "general", "707": "general", "708": "general", "709": "general", "853": "general", "854": "general", "857": "general", "860": "general", "861": "general", "865": "general", "868": "general", "805": "general", "804": "general", "801": "general", "810": "general", "815": "general", "816": "general", "953": "general", "954": "general", "957": "general", "960": "general", "961": "general", "965": "general", "968": "general", "910": "general", "905": "general", "904": "general", "901": "general", "915": "general", "916": "general", "658": "special4", "759": "special4", "710": "special4", "859": "special4", "811": "special4", "812": "special4", "959": "special4", "911": "special4", "912": "special4", "651": "B", "654": "B", "655": "B", "662": "B", "665": "B", "666": "B", "668": "B", "669": "B", "751": "B", "752": "B", "755": "B", "756": "B", "763": "B", "766": "B", "767": "B", "769": "B", "770": "B", "705": "B", "712": "B", "713": "B", "714": "B", "715": "B", "717": "B", "851": "B", "852": "B", "855": "B", "856": "B", "870": "B", "869": "B", "867": "B", "866": "B", "863": "B", "808": "B", "806": "B", "803": "B", "802": "B", "814": "B", "817": "B", "818": "B", "970": "B", "969": "B", "967": "B", "966": "B", "963": "B", "956": "B", "955": "B", "952": "B", "951": "B", "902": "B", "903": "B", "906": "B", "908": "B", "914": "B", "917": "B", "918": "B", "657": "A", "663": "A", "758": "A", "764": "A", "706": "A", "711": "A", "858": "A", "864": "A", "807": "A", "813": "A", "958": "A", "964": "A", "907": "A", "913": "A", "661": "severe", "762": "severe", "716": "severe", "862": "severe", "809": "severe", "962": "severe", "909": "severe", "919": "severe", "819": "severe", "719": "severe", "718": "severe"}, "layouts": {"6E": {"top": ["663", "662", "661", "660", "659", "658", "657"], "left": ["664", "665", "666", "667", "668", "669"], "right": ["656", "655", "654", "653", "652", "651"], "bottom": []}, "7E": {"top": ["764", "763", "762", "761", "760", "759", "758"], "left": ["765", "766", "767", "768", "769", "770"], "right": ["757", "756", "755", "754", "753"], "bottom": ["751", "752"]}, "7W": {"top": ["705", "706", "707", "708", "709", "710", "711", "712", "713"], "left": ["704", "703", "702", "701"], "right": ["714", "715", "716", "717", "718", "719"], "bottom": []}, "8E": {"top": ["864", "863", "862", "861", "860", "859", "858"], "left": ["865", "866", "867", "868", "869", "870"], "right": ["857", "856", "855", "854", "853", "852"], "bottom": ["851"]}, "8W": {"top": ["806", "807", "808", "809", "810", "811", "812", "813", "814"], "left": ["805", "804", "803", "802", "801"], "right": ["815", "816", "817", "818", "819"], "bottom": []}, "9E": {"top": ["964", "963", "962", "961", "960", "959", "958"], "left": ["965", "966", "967", "968", "969", "970"], "right": ["957", "956", "955", "954", "953", "952"], "bottom": ["951"]}, "9W": {"top": ["906", "907", "908", "909", "910", "911", "912", "913", "914"], "left": ["905", "904", "903", "902", "901"], "right": ["915", "916", "917", "918", "919"], "bottom": []}}, "critical": {"3D": 20, "3HCU": 16, "3ICU": 12}};
 const roomTypeLabels={general:"大部屋",special4:"特別4床室",B:"特別室B",A:"特別室A",severe:"重症個室"};
 const roomBedCounts={general:4,special4:4,B:1,A:1,severe:1};
 let currentMapWard="6E";
@@ -199,6 +211,8 @@ let bedData={};
 let criticalData={"3D":0,"3HCU":0,"3ICU":0};
 let adjustmentHistory = JSON.parse(localStorage.getItem("bedControlHistory") || "[]");
 let morningSnapshot = JSON.parse(localStorage.getItem("bedControlMorningSnapshot") || "null");
+let activeSearch=null;
+let transferSource=null;
 
 function totalCapacity(w){ return w.general+w.special4+w.B+w.A+w.severe; }
 function totalAvailable(d){
@@ -233,67 +247,61 @@ function fieldMax(w,key){
   return totalCapacity(w);
 }
 
+function normalizeBed(b){
+  if(!b.status) b.status=b.occupied===false?'vacant':'male';
+  delete b.occupied; return b;
+}
 function createDefaultMapState(){
   const s={wards:{},critical:{}};
   Object.entries(mapConfig.layouts).forEach(([ward,zones])=>{
     s.wards[ward]={};
     [...zones.top,...zones.left,...zones.right,...zones.bottom].forEach(room=>{
       const type=mapConfig.roomType[room];
-      s.wards[ward][room]=Array.from({length:roomBedCounts[type]},(_,i)=>({id:`${room}-${i+1}`,occupied:true}));
+      s.wards[ward][room]=Array.from({length:roomBedCounts[type]},(_,i)=>({id:`${room}-${i+1}`,status:'male'}));
     });
   });
-  Object.entries(mapConfig.critical).forEach(([ward,cap])=>s.critical[ward]=Array.from({length:cap},(_,i)=>({id:`${ward}-${i+1}`,occupied:true})));
+  Object.entries(mapConfig.critical).forEach(([ward,cap])=>s.critical[ward]=Array.from({length:cap},(_,i)=>({id:`${ward}-${i+1}`,status:'male'})));
   return s;
 }
 if(!mapState) mapState=createDefaultMapState();
+else{
+  Object.values(mapState.wards||{}).forEach(rooms=>Object.values(rooms||{}).flat().forEach(normalizeBed));
+  Object.values(mapState.critical||{}).flat().forEach(normalizeBed);
+  Object.entries(mapConfig.layouts).forEach(([ward,zones])=>{mapState.wards[ward] ||= {};[...zones.top,...zones.left,...zones.right,...zones.bottom].forEach(room=>{if(!mapState.wards[ward][room]){const type=mapConfig.roomType[room];mapState.wards[ward][room]=Array.from({length:roomBedCounts[type]},(_,i)=>({id:`${room}-${i+1}`,status:'male'}));}})});
+}
 function cloneData(v){return JSON.parse(JSON.stringify(v));}
 function allMapBeds(ward){return mapConfig.critical[ward]?mapState.critical[ward]:Object.values(mapState.wards[ward]||{}).flat();}
-function mapCount(ward){const beds=allMapBeds(ward),occupied=beds.filter(b=>b.occupied).length;return{total:beds.length,occupied,vacant:beds.length-occupied,rate:beds.length?Math.round(occupied/beds.length*100):0};}
+function isOccupied(b){return b.status==='male'||b.status==='female';}
+function mapCount(ward){const beds=allMapBeds(ward),occupied=beds.filter(isOccupied).length;return{total:beds.length,occupied,vacant:beds.length-occupied,rate:beds.length?Math.round(occupied/beds.length*100):0};}
+function roomSex(roomBeds){const sexes=new Set(roomBeds.filter(isOccupied).map(b=>b.status));return sexes.size===1?[...sexes][0]:sexes.size>1?'mixed':'';}
+function roomAllowsSex(roomBeds,sex,type){return !['general','special4'].includes(type)||!roomSex(roomBeds)||roomSex(roomBeds)===sex;}
 function aggregateFromMap(){
   bedData={};
   Object.keys(wardMaster).forEach(ward=>{
     const d={maleGeneral:0,femaleGeneral:0,maleSpecial4:0,femaleSpecial4:0,B:0,A:0,severe:0,stopped:0};
     Object.entries(mapState.wards[ward]||{}).forEach(([room,beds])=>{
-      const vacant=beds.filter(b=>!b.occupied).length,type=mapConfig.roomType[room];
-      if(type==='general') d.maleGeneral+=vacant;
-      if(type==='special4') d.maleSpecial4+=vacant;
-      if(type==='B') d.B+=vacant;
-      if(type==='A') d.A+=vacant;
-      if(type==='severe') d.severe+=vacant;
-    });
-    bedData[ward]=d;
+      const vacant=beds.filter(b=>b.status==='vacant').length,type=mapConfig.roomType[room],rs=roomSex(beds);
+      if(type==='general'){if(!rs||rs==='male')d.maleGeneral+=vacant;if(!rs||rs==='female')d.femaleGeneral+=vacant;}
+      if(type==='special4'){if(!rs||rs==='male')d.maleSpecial4+=vacant;if(!rs||rs==='female')d.femaleSpecial4+=vacant;}
+      if(type==='B') d.B+=vacant;if(type==='A') d.A+=vacant;if(type==='severe') d.severe+=vacant;
+    }); bedData[ward]=d;
   });
-  Object.keys(mapConfig.critical).forEach(w=>criticalData[w]=mapState.critical[w].filter(b=>!b.occupied).length);
+  Object.keys(mapConfig.critical).forEach(w=>criticalData[w]=mapState.critical[w].filter(b=>b.status==='vacant').length);
 }
 function persistMap(){aggregateFromMap();localStorage.setItem('bedControlMapState',JSON.stringify(mapState));localStorage.setItem('bedControlData',JSON.stringify(bedData));localStorage.setItem('bedControlCritical',JSON.stringify(criticalData));}
 function renderInputs(){renderWardMapTabs();renderMap();}
-function renderWardMapTabs(){
-  const wards=[...Object.keys(mapConfig.layouts),...Object.keys(mapConfig.critical)];
-  document.getElementById('wardMapTabs').innerHTML=wards.map(w=>`<button class="ward-map-tab ${w===currentMapWard?'active':''}" data-map-ward="${w}">${w}</button>`).join('');
-  document.querySelectorAll('[data-map-ward]').forEach(b=>b.addEventListener('click',()=>{currentMapWard=b.dataset.mapWard;renderWardMapTabs();renderMap();}));
-}
-function roomHtml(ward,room){
-  const type=mapConfig.roomType[room],beds=mapState.wards[ward][room];
-  return `<div class="map-room ${beds.length===1?'compact':''}"><div class="map-room-head">${room}</div><div class="map-room-type">${roomTypeLabels[type]}</div><div class="map-beds ${beds.length===1?'single':''}">${beds.map(b=>`<button type="button" class="map-bed ${b.occupied?'occupied':''}" data-bed-id="${b.id}" data-room="${room}">${b.id.split('-').pop()}</button>`).join('')}</div></div>`;
-}
+function renderWardMapTabs(){const wards=[...Object.keys(mapConfig.layouts),...Object.keys(mapConfig.critical)];document.getElementById('wardMapTabs').innerHTML=wards.map(w=>`<button class="ward-map-tab ${w===currentMapWard?'active':''}" data-map-ward="${w}">${w}</button>`).join('');document.querySelectorAll('[data-map-ward]').forEach(b=>b.addEventListener('click',()=>{currentMapWard=b.dataset.mapWard;renderWardMapTabs();renderMap();}));}
+function bedMatchesSearch(ward,room,bed){if(!activeSearch||bed.status!=='vacant'||mapConfig.critical[ward])return false;const type=mapConfig.roomType[room];return type===activeSearch.type&&roomAllowsSex(mapState.wards[ward][room],activeSearch.sex,type);}
+function roomHtml(ward,room){const type=mapConfig.roomType[room],beds=mapState.wards[ward][room];return `<div class="map-room ${beds.length===1?'compact':''}"><div class="map-room-head">${room}</div><div class="map-room-type">${roomTypeLabels[type]}</div><div class="map-beds ${beds.length===1?'single':''}">${beds.map(b=>`<button type="button" class="map-bed ${b.status} ${bedMatchesSearch(ward,room,b)?'found':''}" data-bed-id="${b.id}" data-room="${room}">${b.id.split('-').pop()}</button>`).join('')}</div></div>`;}
 function renderMap(){
-  const c=mapCount(currentMapWard);
-  document.getElementById('mapSummary').innerHTML=`<div class="map-metric">総病床<strong>${c.total}床</strong></div><div class="map-metric">使用中<strong>${c.occupied}床</strong></div><div class="map-metric">空床<strong>${c.vacant}床</strong></div><div class="map-metric">稼働率<strong>${c.rate}％</strong></div>`;
+  const c=mapCount(currentMapWard);document.getElementById('mapSummary').innerHTML=`<div class="map-metric">総病床<strong>${c.total}床</strong></div><div class="map-metric">使用中<strong>${c.occupied}床</strong></div><div class="map-metric">空床<strong>${c.vacant}床</strong></div><div class="map-metric">稼働率<strong>${c.rate}％</strong></div>`;
   const root=document.getElementById('hospitalMap');
-  if(mapConfig.critical[currentMapWard]){
-    root.innerHTML=`<div class="map-canvas"><div class="map-zone top" style="flex-wrap:wrap;left:4%;right:4%">${mapState.critical[currentMapWard].map(b=>`<div class="map-room compact"><div class="map-room-head">${b.id}</div><div class="map-beds single"><button type="button" class="map-bed ${b.occupied?'occupied':''}" data-bed-id="${b.id}" data-room="critical">1</button></div></div>`).join('')}</div></div>`;
-  }else{
-    const z=mapConfig.layouts[currentMapWard];
-    root.innerHTML=`<div class="map-canvas"><div class="map-zone top">${z.top.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone left">${z.left.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone right">${z.right.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone bottom">${z.bottom.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone center"><div class="nurse-station">ナースステーション</div></div></div>`;
-  }
-  root.querySelectorAll('.map-bed').forEach(b=>b.addEventListener('click',()=>toggleMapBed(b.dataset.room,b.dataset.bedId)));
+  if(mapConfig.critical[currentMapWard]) root.innerHTML=`<div class="map-canvas"><div class="map-zone top" style="flex-wrap:wrap;left:4%;right:4%">${mapState.critical[currentMapWard].map(b=>`<div class="map-room compact"><div class="map-room-head">${b.id}</div><div class="map-beds single"><button type="button" class="map-bed ${b.status}" data-bed-id="${b.id}" data-room="critical">1</button></div></div>`).join('')}</div></div>`;
+  else{const z=mapConfig.layouts[currentMapWard];root.innerHTML=`<div class="map-canvas"><div class="map-zone top">${z.top.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone left">${z.left.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone right">${z.right.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone bottom">${z.bottom.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone center"><div class="nurse-station">ナースステーション</div></div></div>`;}
+  root.querySelectorAll('.map-bed').forEach(b=>{b.addEventListener('click',()=>toggleMapBed(b.dataset.room,b.dataset.bedId));b.addEventListener('contextmenu',e=>{e.preventDefault();openTransfer(currentMapWard,b.dataset.room,b.dataset.bedId)});let timer;b.addEventListener('touchstart',()=>timer=setTimeout(()=>openTransfer(currentMapWard,b.dataset.room,b.dataset.bedId),650),{passive:true});['touchend','touchmove'].forEach(ev=>b.addEventListener(ev,()=>clearTimeout(timer),{passive:true}));});
 }
-function toggleMapBed(room,id){
-  const bed=mapConfig.critical[currentMapWard]?mapState.critical[currentMapWard].find(b=>b.id===id):mapState.wards[currentMapWard][room].find(b=>b.id===id);
-  bed.occupied=!bed.occupied;
-  persistMap();renderMap();renderOverview();
-}
-function setCurrentWardAll(occupied){allMapBeds(currentMapWard).forEach(b=>b.occupied=occupied);persistMap();renderMap();renderOverview();}
+function toggleMapBed(room,id){const bed=mapConfig.critical[currentMapWard]?mapState.critical[currentMapWard].find(b=>b.id===id):mapState.wards[currentMapWard][room].find(b=>b.id===id);bed.status=bed.status==='vacant'?'male':bed.status==='male'?'female':'vacant';persistMap();renderMap();renderOverview();}
+function setCurrentWardAll(status){allMapBeds(currentMapWard).forEach(b=>b.status=status);persistMap();renderMap();renderOverview();}
 function saveBeds(){
   persistMap();
   morningSnapshot={mapState:cloneData(mapState),bedData:cloneData(bedData),criticalData:cloneData(criticalData),savedAt:new Date().toISOString()};
@@ -316,16 +324,8 @@ function roomLabel(pref, sex){
 }
 
 
-function occupyFirstMatchingBed(ward,pref){
-  if(!mapState.wards[ward]) return;
-  const targetType=pref==='any'?null:pref;
-  for(const [room,beds] of Object.entries(mapState.wards[ward])){
-    if(targetType && mapConfig.roomType[room]!==targetType) continue;
-    const bed=beds.find(b=>!b.occupied);if(bed){bed.occupied=true;return bed.id;}
-  }
-  return '';
-}
-function occupyCriticalBed(unit){const bed=(mapState.critical[unit]||[]).find(b=>!b.occupied);if(bed){bed.occupied=true;return bed.id;}return '';}
+function occupyFirstMatchingBed(ward,pref,sex){if(!mapState.wards[ward])return '';for(const [room,beds] of Object.entries(mapState.wards[ward])){const type=mapConfig.roomType[room];if(pref!=='any'&&type!==pref)continue;if(!roomAllowsSex(beds,sex,type))continue;const bed=beds.find(b=>b.status==='vacant');if(bed){bed.status=sex;return bed.id;}}return '';}
+function occupyCriticalBed(unit,sex){const bed=(mapState.critical[unit]||[]).find(b=>b.status==='vacant');if(bed){bed.status=sex;return bed.id;}return '';}
 
 function patientField(index,name){
   return document.getElementById(`p${index}-${name}`);
@@ -424,7 +424,7 @@ function confirmGeneralAdjustment(ward,pref,sex,patientIndex){
   }
   const beforeBeds=JSON.parse(JSON.stringify(bedData)); const beforeMap=cloneData(mapState);
   const beforeCritical=JSON.parse(JSON.stringify(criticalData));
-  const assignedBed=occupyFirstMatchingBed(ward,pref);
+  const assignedBed=occupyFirstMatchingBed(ward,pref,sex);
   persistMap();
   const detail=`${ward}・${roomLabel(pref,sex)}を1床使用${assignedBed?`（${assignedBed}）`:``}`;
   saveHistoryEntry(`${ward}で入院調整`,detail,beforeBeds,beforeCritical,beforeMap,patientIndex,ward);
@@ -438,7 +438,7 @@ function confirmCriticalAdjustment(unit,patientIndex){
   }
   const beforeBeds=JSON.parse(JSON.stringify(bedData)); const beforeMap=cloneData(mapState);
   const beforeCritical=JSON.parse(JSON.stringify(criticalData));
-  const assignedBed=occupyCriticalBed(unit);
+  const assignedBed=occupyCriticalBed(unit,patientField(patientIndex,"sex").value);
   persistMap();
   const detail=`${unit}を1床使用${assignedBed?`（${assignedBed}）`:``}`;
   saveHistoryEntry(`${unit}で入院調整`,detail,beforeBeds,beforeCritical,beforeMap,patientIndex,unit);
@@ -540,7 +540,7 @@ function renderOverview(){
       <div class="ward-head">
         <div>
           <div class="ward-title">${n}</div>
-          <div class="summary">空床合計 <strong>${avail}床</strong>｜利用停止 ${d.stopped||0}床｜本日の受入 <span class="accept-count">${todayAcceptCount(n)}件</span></div>
+          <div class="summary">空床合計 <strong>${avail}床</strong>｜利用停止 ${d.stopped||0}床｜本日の受入 <span class="accept-count" onclick="showAcceptDetails('${n}')">${todayAcceptCount(n)}件</span></div>
         </div>
         ${occupancyHtml(occ)}
       </div>
@@ -560,7 +560,7 @@ function renderOverview(){
       <div class="ward-head">
         <div>
           <div class="ward-title">${n}</div>
-          <div class="summary">空床 <strong>${avail}床</strong>｜総病床 ${cap}床｜本日の受入 <span class="accept-count">${todayAcceptCount(n)}件</span></div>
+          <div class="summary">空床 <strong>${avail}床</strong>｜総病床 ${cap}床｜本日の受入 <span class="accept-count" onclick="showAcceptDetails('${n}')">${todayAcceptCount(n)}件</span></div>
         </div>
         ${occupancyHtml(occ)}
       </div>
@@ -573,6 +573,12 @@ function renderOverview(){
     ${criticalCards}`;
 }
 
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function showAcceptDetails(destination){const items=adjustmentHistory.filter(h=>isToday(h.time)&&destinationFromHistory(h)===destination);document.getElementById('acceptModalTitle').textContent=`${destination} 本日の受入詳細`;document.getElementById('acceptModalBody').innerHTML=items.length?items.map(h=>`<div class="history-item"><strong>${h.patient.patientName}</strong>（${h.patient.sex==='male'?'男性':'女性'}・${h.patient.age}歳）<div>${h.patient.department}／${h.patient.diagnosis||'病名未入力'}</div><div class="summary">${formatDate(h.time)}｜${h.detail}</div></div>`).join(''):'<div class="empty">本日の受入はありません。</div>';document.getElementById('acceptModal').classList.add('open');}
+function resetPatientForm(index){const form=document.getElementById(`patient-form-${index}`);form.querySelectorAll('input,textarea').forEach(e=>e.value='');form.querySelectorAll('select').forEach(e=>e.selectedIndex=0);patientField(index,'results').innerHTML='';}
+function openTransfer(ward,room,id){if(mapConfig.critical[ward])return;const bed=mapState.wards[ward][room].find(b=>b.id===id);if(!bed||bed.status==='vacant'){alert('転出調整は使用中の病床から開始してください。');return;}transferSource={ward,room,id,sex:bed.status};document.getElementById('transferSource').innerHTML=`転出元：<strong>${ward}・${room}（病床${id.split('-').pop()}）</strong>／${bed.status==='male'?'男性':'女性'}`;document.getElementById('transferForm').innerHTML=`<div class="grid"><div><label>患者氏名（テスト用）</label><input id="t-name" placeholder="例：テスト患者"></div><div><label>診療科</label><select id="t-dept">${departments.map(d=>`<option>${d}</option>`).join('')}</select></div><div><label>年齢</label><select id="t-age">${ageOptions(0)}</select></div><div><label>希望病室</label><select id="t-pref"><option value="general">大部屋</option><option value="special4">特別4床室</option><option value="B">特別室B</option><option value="A">特別室A</option><option value="severe">重症個室</option></select></div><div><label>認知症</label><select id="t-dementia"><option>なし</option><option>あり</option><option>不明</option></select></div><div><label>ADL</label><select id="t-adl"><option>自立</option><option>独歩</option><option>車椅子</option><option>ストレッチャー</option><option>寝たきり</option></select></div><div><label>酸素</label><select id="t-oxygen"><option>なし</option><option>あり</option></select></div><div><label>病名</label><input id="t-diagnosis"></div></div><div style="margin-top:12px"><label>その他医療的情報・注意事項</label><textarea id="t-notes"></textarea></div><div class="actions"><button class="btn btn-primary" onclick="judgeTransfer()">転出先候補を表示</button></div>`;document.getElementById('transferResults').innerHTML='';document.getElementById('transferModal').classList.add('open');}
+function judgeTransfer(){const dept=document.getElementById('t-dept').value,pref=document.getElementById('t-pref').value,sex=transferSource.sex,candidates=[];Object.entries(wardMaster).forEach(([name,w])=>{if(name===transferSource.ward)return;const d=bedData[name]||{},avail=roomAvailability(d,pref,sex),total=totalAvailable(d),isPrimary=w.depts.includes(dept),blocked=w.restricted&&!isPrimary;if(!blocked&&avail>0)candidates.push({name,avail,total,isPrimary,score:(isPrimary?1000:0)+total*10+avail});});candidates.sort((a,b)=>b.score-a.score);document.getElementById('transferResults').innerHTML=candidates.length?candidates.slice(0,3).map((c,i)=>`<div class="result"><h3><span class="rank">第${i+1}候補</span><span>${c.name}・${roomLabel(pref,sex)}</span></h3><p>${c.isPrimary?'主病棟':'代替病棟'}／適合空床 ${c.avail}床</p><button class="confirm-btn" onclick="confirmTransfer('${c.name}','${pref}')">この候補で転出確定</button></div>`).join(''):'<div class="empty">条件に合う転出先がありません。</div>';}
+function confirmTransfer(toWard,pref){const beforeBeds=cloneData(bedData),beforeCritical=cloneData(criticalData),beforeMap=cloneData(mapState);const sourceBed=mapState.wards[transferSource.ward][transferSource.room].find(b=>b.id===transferSource.id);const targetId=occupyFirstMatchingBed(toWard,pref,transferSource.sex);if(!targetId){alert('転出先の空床がなくなりました。');return;}sourceBed.status='vacant';persistMap();const patient={patientId:'未入力',patientName:document.getElementById('t-name').value||'転出患者',department:document.getElementById('t-dept').value,diagnosis:document.getElementById('t-diagnosis').value||'',sex:transferSource.sex,age:document.getElementById('t-age').value};adjustmentHistory.unshift({id:Date.now(),time:new Date().toISOString(),label:`${transferSource.ward}から${toWard}へ転出調整`,detail:`${transferSource.ward}・${transferSource.room}（${transferSource.id}）→${toWard}・${roomLabel(pref,transferSource.sex)}（${targetId}）`,destination:toWard,patient,beforeBeds,beforeCritical,beforeMap,afterBeds:cloneData(bedData),afterCritical:cloneData(criticalData)});localStorage.setItem('bedControlHistory',JSON.stringify(adjustmentHistory));renderMap();renderOverview();renderHistory();closeModal('transferModal');alert('転出調整を確定しました。');}
 function populateCriticalInputs(){}
 function patientFormHtml(index){
   return `<div class="patient-form ${index===0?"active":""}" id="patient-form-${index}">
@@ -601,7 +607,7 @@ function patientFormHtml(index){
       <div><label>病名</label><input id="p${index}-diagnosis"></div>
     </div>
     <div style="margin-top:12px"><label>その他医療的情報・注意事項</label><textarea id="p${index}-notes"></textarea></div>
-    <div class="actions"><button class="btn btn-primary" onclick="judge(${index})">候補病棟を表示</button></div>
+    <div class="actions"><button class="btn btn-primary" onclick="judge(${index})">候補病棟を表示</button><button class="btn btn-sub" onclick="resetPatientForm(${index})">入力内容をリセット</button></div>
     <div id="p${index}-results"></div>
   </div>`;
 }
@@ -625,8 +631,12 @@ document.querySelectorAll(".tab-btn").forEach(b=>b.addEventListener("click",()=>
 }));
 document.getElementById("saveBeds").addEventListener("click",saveBeds);
 document.getElementById("undoLatest").addEventListener("click",undoLatest);
-document.getElementById("allOccupied").addEventListener("click",()=>setCurrentWardAll(true));
-document.getElementById("allVacant").addEventListener("click",()=>setCurrentWardAll(false));
+document.getElementById("allMale").addEventListener("click",()=>setCurrentWardAll('male'));
+document.getElementById("allFemale").addEventListener("click",()=>setCurrentWardAll('female'));
+document.getElementById("allVacant").addEventListener("click",()=>setCurrentWardAll('vacant'));
+document.getElementById('toggleSearch').addEventListener('click',()=>document.getElementById('searchPanel').classList.toggle('open'));
+document.getElementById('runSearch').addEventListener('click',()=>{activeSearch={type:document.getElementById('searchRoomType').value,sex:document.getElementById('searchSex').value};renderMap();});
+document.getElementById('clearSearch').addEventListener('click',()=>{activeSearch=null;renderMap();});
 document.getElementById("clearBeds").addEventListener("click",()=>{
   if(!confirm("病床マップを全床使用中の初期状態に戻しますか？")) return;
   mapState=createDefaultMapState();bedData={};criticalData={"3D":0,"3HCU":0,"3ICU":0};adjustmentHistory=[];morningSnapshot=null;
