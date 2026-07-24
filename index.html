@@ -125,7 +125,7 @@
 <body>
 <header>
   <h1>小田原市立総合医療センター　ベッドコントロールシステム</h1>
-  <p>試作版 Ver.0.9.3｜データはこの端末のブラウザ内にのみ保存されます</p>
+  <p>試作版 Ver.0.9.4｜データはこの端末のブラウザ内にのみ保存されます</p>
 </header>
 <main>
   <div class="notice"><strong>テスト時の注意：</strong>実在する患者氏名・患者IDなどの個人情報は入力せず、架空データで操作してください。</div>
@@ -340,7 +340,18 @@ function renderMap(){
   else{const z=mapConfig.layouts[currentMapWard];root.innerHTML=`<div class="map-canvas"><div class="map-zone top">${z.top.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone left">${z.left.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone right">${z.right.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone bottom">${z.bottom.map(r=>roomHtml(currentMapWard,r)).join('')}</div><div class="map-zone center"><div class="nurse-station">ナースステーション</div></div></div>`;}
   root.querySelectorAll('.map-bed').forEach(b=>b.addEventListener('click',()=>{if(transferMode)selectTransferSource(currentMapWard,b.dataset.room,b.dataset.bedId);else toggleMapBed(b.dataset.room,b.dataset.bedId);}));
 }
-function setTransferMode(on){transferMode=on;const btn=document.getElementById('toggleTransfer'),note=document.getElementById('transferModeNote');btn.classList.toggle('active',on);btn.textContent=`転出調整：${on?'ON':'OFF'}`;note.classList.toggle('open',on);if(!on){transferSource=null;document.getElementById('transferSelection').classList.remove('open');}renderMap();}
+function setTransferMode(on,preserveSource=false){
+  transferMode=on;
+  const btn=document.getElementById('toggleTransfer'),note=document.getElementById('transferModeNote');
+  btn.classList.toggle('active',on);
+  btn.textContent=`転出調整：${on?'ON':'OFF'}`;
+  note.classList.toggle('open',on);
+  if(!on&&!preserveSource){
+    transferSource=null;
+    document.getElementById('transferSelection').classList.remove('open');
+  }
+  renderMap();
+}
 function toggleMapBed(room,id){const bed=mapConfig.critical[currentMapWard]?mapState.critical[currentMapWard].find(b=>b.id===id):mapState.wards[currentMapWard][room].find(b=>b.id===id);bed.status=bed.status==='vacant'?'male':bed.status==='male'?'female':'vacant';persistMap();renderMap();renderOverview();}
 function setCurrentWardAll(status){allMapBeds(currentMapWard).forEach(b=>b.status=status);persistMap();renderMap();renderOverview();}
 function saveBeds(){
@@ -634,10 +645,43 @@ function openTransferInput(){
   document.getElementById('transferSource').innerHTML=`転出元：<strong>${transferSource.ward}・${transferSource.room}（${transferSource.id}）</strong>／${transferSource.sex==='male'?'男性':'女性'}`;
   document.getElementById('transferForm').innerHTML=`<div class="grid"><div><label>患者ID（テスト用）</label><input id="t-id" placeholder="例：TRANSFER-001"></div><div><label>患者氏名（テスト用）</label><input id="t-name" placeholder="例：テスト患者"></div><div><label>診療科</label><select id="t-dept">${departments.map(d=>`<option>${d}</option>`).join('')}</select></div><div><label>性別</label><input value="${transferSource.sex==='male'?'男性':'女性'}" disabled></div><div><label>年齢</label><select id="t-age">${ageOptions(0)}</select></div><div><label>必要病床区分</label><select id="t-care"><option value="general">一般病棟</option></select></div><div><label>希望病室</label><select id="t-pref"><option value="any">希望なし</option><option value="general">大部屋</option><option value="special4">特別4床室</option><option value="B">特別室B</option><option value="A">特別室A</option><option value="severe">重症個室</option></select></div><div><label>認知症</label><select id="t-dementia"><option>なし</option><option>あり</option><option>不明</option></select></div><div><label>ADL</label><select id="t-adl"><option>自立</option><option>独歩</option><option>車椅子</option><option>ストレッチャー</option><option>寝たきり</option></select></div><div><label>酸素</label><select id="t-oxygen"><option>なし</option><option>あり</option></select></div><div><label>NEWSスコア</label><select id="t-news">${numberOptions(20,0)}</select></div><div><label>病名</label><input id="t-diagnosis"></div></div><div style="margin-top:12px"><label>その他医療的情報・注意事項</label><textarea id="t-notes"></textarea></div><div class="actions"><button class="btn btn-primary" onclick="judgeTransfer()">転出先候補を表示</button><button class="btn btn-sub" onclick="resetTransferForm()">入力内容をリセット</button></div>`;
   document.getElementById('transferResults').innerHTML='';
-  setTransferMode(false);
+  setTransferMode(false,true);
 }
 function resetTransferForm(){document.querySelectorAll('#transferForm input:not([disabled]),#transferForm textarea').forEach(e=>e.value='');document.querySelectorAll('#transferForm select').forEach(e=>e.selectedIndex=0);document.getElementById('transferResults').innerHTML='';}
-function judgeTransfer(){const dept=document.getElementById('t-dept').value,pref=document.getElementById('t-pref').value,sex=transferSource.sex,candidates=[];Object.entries(wardMaster).forEach(([name,w])=>{if(name===transferSource.ward)return;const d=bedData[name]||{},avail=roomAvailability(d,pref,sex),total=totalAvailable(d),isPrimary=w.depts.includes(dept),blocked=w.restricted&&!isPrimary;if(!blocked&&avail>0)candidates.push({name,avail,total,isPrimary,score:(isPrimary?1000:0)+total*10+avail});});candidates.sort((a,b)=>b.score-a.score);document.getElementById('transferResults').innerHTML=candidates.length?candidates.slice(0,3).map((c,i)=>`<div class="result"><h3><span class="rank">第${i+1}候補</span><span>${c.name}・${roomLabel(pref,sex)}</span></h3><p>${c.isPrimary?'主病棟':'代替病棟'}／適合空床 ${c.avail}床</p><button class="confirm-btn" onclick="confirmTransfer('${c.name}','${pref}')">この候補で転出確定</button></div>`).join(''):'<div class="empty">条件に合う転出先がありません。</div>';}
+function judgeTransfer(){
+  const results=document.getElementById('transferResults');
+  if(!transferSource){
+    results.innerHTML='<div class="empty">転出元の病床情報がありません。①朝の病床入力から転出元を選び直してください。</div>';
+    return;
+  }
+  persistMap();
+  const dept=document.getElementById('t-dept')?.value||'';
+  const pref=document.getElementById('t-pref')?.value||'any';
+  const sex=transferSource.sex;
+  const candidates=[];
+  Object.entries(wardMaster).forEach(([name,w])=>{
+    if(name===transferSource.ward) return;
+    const compatible=[];
+    Object.entries(mapState.wards[name]||{}).forEach(([room,beds])=>{
+      const type=mapConfig.roomType[room];
+      if(pref!=='any'&&type!==pref) return;
+      if(!roomAllowsSex(beds,sex,type)) return;
+      beds.filter(b=>b.status==='vacant').forEach(b=>compatible.push({room,bedId:b.id,type}));
+    });
+    const isPrimary=w.depts.includes(dept);
+    const blocked=w.restricted&&!isPrimary;
+    if(!blocked&&compatible.length){
+      candidates.push({name,compatible,isPrimary,total:totalAvailable(bedData[name]||{}),score:(isPrimary?1000:0)+compatible.length*20+totalAvailable(bedData[name]||{})});
+    }
+  });
+  candidates.sort((a,b)=>b.score-a.score);
+  results.innerHTML=candidates.length?candidates.slice(0,3).map((c,i)=>{
+    const first=c.compatible[0];
+    const label=pref==='any'?roomTypeLabels[first.type]:roomLabel(pref,sex);
+    return `<div class="result"><h3><span class="rank">第${i+1}候補</span><span>${c.name}・${label}</span></h3><p>${c.isPrimary?'主病棟':'代替病棟'}／適合空床 ${c.compatible.length}床</p><p class="summary">候補例：${first.room}（${first.bedId}）</p><button class="confirm-btn" onclick="confirmTransfer('${c.name}','${pref}')">この候補で転出確定</button></div>`;
+  }).join(''):'<div class="empty">条件に合う転出先がありません。</div>';
+}
+
 function confirmTransfer(toWard,pref){const beforeBeds=cloneData(bedData),beforeCritical=cloneData(criticalData),beforeMap=cloneData(mapState);const sourceBed=mapState.wards[transferSource.ward][transferSource.room].find(b=>b.id===transferSource.id);const targetId=occupyFirstMatchingBed(toWard,pref,transferSource.sex);if(!targetId){alert('転出先の空床がなくなりました。');return;}sourceBed.status='vacant';persistMap();const patient={patientId:'未入力',patientName:document.getElementById('t-name').value||'転出患者',department:document.getElementById('t-dept').value,diagnosis:document.getElementById('t-diagnosis').value||'',sex:transferSource.sex,age:document.getElementById('t-age').value};adjustmentHistory.unshift({id:Date.now(),time:new Date().toISOString(),label:`${transferSource.ward}から${toWard}へ転出調整`,detail:`${transferSource.ward}・${transferSource.room}（${transferSource.id}）→${toWard}・${roomLabel(pref,transferSource.sex)}（${targetId}）`,destination:toWard,patient,beforeBeds,beforeCritical,beforeMap,afterBeds:cloneData(bedData),afterCritical:cloneData(criticalData)});localStorage.setItem('bedControlHistory',JSON.stringify(adjustmentHistory));renderMap();renderOverview();renderHistory();document.getElementById('transferResults').innerHTML='<div class="result"><h3><span class="rank">転出確定</span><span>'+toWard+'</span></h3><p>転出元を空床にし、転出先の病床を更新しました。</p></div>';transferSource=null;document.getElementById('transferSelection').classList.remove('open');alert('転出調整を確定しました。');}
 function populateCriticalInputs(){}
 function patientFormHtml(index){
